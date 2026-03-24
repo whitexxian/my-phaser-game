@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.10" tiledversion="1.12.0" orientation="orthogonal" renderorder="right-down" width="10" height="10" tilewidth="16" tileheight="16" infinite="0" nextlayerid="6" nextobjectid="13">
+ <editorsettings>
+  <export target="house.json" format="json"/>
+ </editorsettings>
+ <tileset firstgid="1" name="terrian" tilewidth="16" tileheight="16" tilecount="4096" columns="64">
+  <image source="terrian.png" width="1024" height="1024"/>
+ </tileset>
+ <layer id="1" name="Ground1" width="10" height="10">
+  <data encoding="csv">
+0,0,0,0,0,0,0,0,0,0,
+450,450,450,450,450,450,450,450,450,450,
+450,450,450,450,450,450,450,450,450,450,
+450,450,450,450,450,450,450,450,450,450,
+450,450,450,450,450,450,450,450,450,450,
+450,450,450,450,450,450,450,450,450,450,
+450,450,450,450,450,450,450,450,450,450,
+450,450,450,450,450,450,450,450,450,450,
+450,450,450,450,450,450,450,450,450,450,
+0,0,0,0,0,0,0,0,0,0
+</data>
+ </layer>
+ <layer id="4" name="Ground2" width="10" height="10">
+  <data encoding="csv">
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,650,0,0,652,0,586,
+0,0,0,0,0,0,0,652,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,2281,2282,2283,0,0,0,
+0,0,0,0,2345,2346,2347,0,0,0,
+0,0,0,0,2409,2410,2411,0,0,0,
+0,0,0,0,0,0,0,0,0,0
+</data>
+ </layer>
+ <layer id="2" name="Walls" width="10" height="10">
+  <data encoding="csv">
+642,646,646,646,646,646,646,646,646,582,
+644,1573,0,0,0,0,0,0,0,3221226116,
+644,1573,1959,0,0,0,0,0,0,3221226116,
+644,1701,1701,1701,1701,1701,1701,1701,0,3221226116,
+644,0,0,0,0,0,0,0,0,3221226116,
+644,0,0,0,0,0,0,0,0,3221226116,
+644,0,0,0,2229,0,0,0,0,3221226116,
+644,0,0,0,0,0,0,0,0,3221226116,
+644,0,0,0,0,0,0,0,0,3221226116,
+580,581,581,581,581,1643,581,581,581,579
+</data>
+ </layer>
+ <objectgroup id="5" name="Triggers" locked="1">
+  <object id="2" name="door_to_overworld" type="door" x="80" y="142.333" width="16.6667" height="18"/>
+  <object id="3" name="ladder_to_2floor" type="ladder" x="141" y="15.6667" width="13.3333" height="16"/>
+  <object id="7" name="chest_gauntlet" type="chest" x="23.3333" y="22.3333" width="35.3333" height="34.3333"/>
+  <object id="8" name="ladder_from_underground" type="ladder" x="64" y="16" width="16" height="15.6667"/>
+  <object id="10" name="door_solid" x="120.333" y="16" width="7.33333" height="32"/>
+  <object id="11" name="zone_unlock" x="87.3333" y="15.6667" width="33" height="32.3333"/>
+  <object id="12" name="zone_locked" x="128" y="15.6667" width="7.66667" height="32.3333"/>
+ </objectgroup>
+ <layer id="3" name="Above" width="10" height="10">
+  <data encoding="csv">
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0,
+0,0,0,0,0,0,0,0,0,0
+</data>
+ </layer>
+</map>
