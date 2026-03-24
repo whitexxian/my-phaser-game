@@ -1,5 +1,7 @@
 # 🍎 Apple Knight Adventure (苹果勇者大冒险)
 
+🔗 **[点击这里直接游玩在线 Demo！]**https://appleknight.vercel.app/
+
 这是一款基于 `Phaser 3` + `TypeScript` 开发的 2.5D 动作角色扮演游戏 (A-RPG) 垂直切片 Demo。
 
 ## 🎮 核心机制与玩法 (Features)
