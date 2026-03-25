@@ -29,6 +29,8 @@
 * **构建工具**：Vite
 * **地图编辑器**：Tiled Map Editor (JSON 导出与多图层解析)
 
+## 🤖 开发日志 (Log)
+
 * 这个demo断断续续做了三天，几乎完全基于gemini-3.1-pro-preview和trae制作，人物动作帧通过Piskel绘制，地图文件使用Tiled与SunnySide_World公共地图块包制作。
 * 该项目后续也会进行维护。
 
