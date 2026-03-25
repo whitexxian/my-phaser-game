@@ -5,6 +5,7 @@ export default class HouseScene extends Phaser.Scene {
   private player!: Player;
   private map!: Phaser.Tilemaps.Tilemap;
   private activeInteractZone: string = "";
+  private openedChests = new Set<string>();
 
   constructor() {
     super("HouseScene");
@@ -71,7 +72,42 @@ export default class HouseScene extends Phaser.Scene {
     // 从 JSON 地图里，找到我们刚才建的叫 'Triggers' 的对象层
     const triggerLayer = this.map.getObjectLayer("Triggers");
     
-    if (this.scene.settings.data && (this.scene.settings.data as any).spawnPoint) {
+    // 恢复打开的宝箱状态（必须在Walls图层创建之后）
+    if ((this.game as any).globalState && (this.game as any).globalState.openedChests) {
+      this.openedChests = new Set((this.game as any).globalState.openedChests);
+      console.log("恢复打开的宝箱状态:", Array.from(this.openedChests));
+      
+      // 直接显示已经打开的宝箱
+      if (triggerLayer && triggerLayer.objects) {
+        triggerLayer.objects.forEach(obj => {
+          if (obj.name.startsWith('chest_') && this.openedChests.has(obj.name)) {
+            const wallsLayer = this.map.getLayer('Walls')!.tilemapLayer;
+            if (wallsLayer) {
+              wallsLayer.putTileAtWorldXY(1958, obj.x! + obj.width! / 2, obj.y! + obj.height! / 2);
+              wallsLayer.setCollisionByExclusion([-1]);
+            }
+          }
+        });
+      }
+    }
+    
+    // 检查是否有保存的玩家状态（场景重启时）
+    const savedState = (this.game as any).globalState?.playerState;
+    
+    // 优先检查是否有保存的玩家状态（场景重启时）
+    if (savedState && savedState.sceneName === "HouseScene") {
+      // 如果有保存的玩家状态（场景重启时），恢复玩家位置
+      console.log("恢复玩家位置:", savedState.x, savedState.y);
+      playerX = savedState.x;
+      playerY = savedState.y;
+      
+      // 销毁位置记录，确保只生效一次
+      if ((this.game as any).globalState) {
+        delete (this.game as any).globalState.playerState;
+        console.log("销毁玩家位置记录，下次将使用正常传送点");
+      }
+    } else if (this.scene.settings.data && (this.scene.settings.data as any).spawnPoint) {
+      // 如果没有保存的状态但有spawnPoint（从其他场景传送过来），使用传送点位置
       const spawnPoint = (this.scene.settings.data as any).spawnPoint;
       
       // 从触发器对象中找到对应的位置
@@ -96,8 +132,16 @@ export default class HouseScene extends Phaser.Scene {
         console.warn("No trigger layer found in HouseScene");
       }
     }
+   // 获取hasGauntlet状态（优先从全局状态恢复，其次从场景设置）
+    let hasGauntlet = false;
+    if (savedState) {
+      hasGauntlet = savedState.hasGauntlet || false;
+    } else {
+      hasGauntlet = this.scene.settings.data && (this.scene.settings.data as any).hasGauntlet || false;
+    }
     
-    this.player = new Player(this, playerX, playerY, "player");
+    // 创建玩家
+    this.player = new Player(this, playerX, playerY, "player", hasGauntlet);
 
     // 5. 批量渲染 Above 层 (不需要碰撞，但必须遮挡玩家)
     const aboveLayers = ["Above"];
@@ -163,6 +207,12 @@ export default class HouseScene extends Phaser.Scene {
       });
     }
 
+    // 从全局状态加载已打开的宝箱
+    if ((this.game as any).globalState && (this.game as any).globalState.openedChests) {
+      this.openedChests = new Set((this.game as any).globalState.openedChests);
+      console.log("已加载全局宝箱状态:", Array.from(this.openedChests));
+    }
+
     this.scene.launch("UIScene");
 
     // ==========================================
@@ -207,6 +257,41 @@ export default class HouseScene extends Phaser.Scene {
     else if (this.activeInteractZone === "ladder_from_underground") {
       this.switchScene("UnderGroundScene", "ladder_to_chest");
     }
+    // 宝箱交互
+    else if (this.activeInteractZone.startsWith('chest_') && !this.openedChests.has(this.activeInteractZone)) {
+      
+      this.openedChests.add(this.activeInteractZone);
+      
+      // 保存打开状态到全局
+      if (!(this.game as any).globalState) {
+          (this.game as any).globalState = {};
+      }
+      (this.game as any).globalState.openedChests = Array.from(this.openedChests);
+      console.log("宝箱打开状态已保存到全局");
+      
+      // 视觉：把宝箱的图块从“关”换成“开”
+      if (this.activeInteractZone === 'chest_gauntlet') {
+          const triggerLayer = this.map.getObjectLayer('Triggers');
+          if (triggerLayer && triggerLayer.objects) {
+              const chestObject = triggerLayer.objects.find(obj => obj.name === 'chest_gauntlet');
+              if (chestObject) {
+                  const walls2Layer = this.map.getLayer('Walls')!.tilemapLayer;
+                  if (walls2Layer) {
+                      // 确保在Walls层替换图块
+                      walls2Layer.putTileAtWorldXY(1958, chestObject.x! + chestObject.width! / 2, chestObject.y! + chestObject.height! / 2);
+                      
+                      // 重新设置碰撞，确保新放置的图块有碰撞体积
+                      walls2Layer.setCollisionByExclusion([-1]);
+                  }
+              }
+          }
+      }
+
+      if (this.activeInteractZone === 'chest_gauntlet') {
+          console.log("获得【破岩拳套】！翻滚后可直接派生重击！");
+          this.player.upgradeToGauntlet();
+      }
+    }
   }
 
   // 切换场景的通用方法
@@ -226,6 +311,7 @@ export default class HouseScene extends Phaser.Scene {
         this.scene.start(targetScene, {
           spawnPoint: spawnPoint,
           playerHealth: 3, // 【重要】把当前的血量传给下一个场景！
+          hasGauntlet: this.player.hasGauntlet,
         });
       },
     );

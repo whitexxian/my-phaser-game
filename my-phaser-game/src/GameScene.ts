@@ -43,14 +43,32 @@ export default class GameScene extends Phaser.Scene {
       frameHeight: 32,
     });
     
+    // 1.1 加载玩家新形象图纸（拳套版）
+    this.load.spritesheet("player_new", "assets/player_new.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+    
     // 2. 加载翻滚动画图纸
     this.load.spritesheet("player_roll", "assets/player_roll.png", {
       frameWidth: 32,
       frameHeight: 32,
     });
     
+    // 2.1 加载翻滚动画新图纸（拳套版）
+    this.load.spritesheet("player_roll_new", "assets/player_roll_new.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+    
     // 3. 加载攻击动画图纸
     this.load.spritesheet("player_attack", "assets/player_attack.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+    
+    // 3.1 加载攻击动画新图纸（拳套版）
+    this.load.spritesheet("player_attack_new", "assets/player_attack_new.png", {
       frameWidth: 32,
       frameHeight: 32,
     });
@@ -191,8 +209,11 @@ export default class GameScene extends Phaser.Scene {
       }
     }
     
+    // 获取hasGauntlet状态（如果有传递）
+    const hasGauntlet = this.scene.settings.data && (this.scene.settings.data as any).hasGauntlet || false;
+    
     // 创建玩家
-    this.player = new Player(this, playerX, playerY, "player");
+    this.player = new Player(this, playerX, playerY, "player", hasGauntlet);
     
     // ==========================================
     // 【新增 1：全局吸血监听】
@@ -635,7 +656,11 @@ export default class GameScene extends Phaser.Scene {
     
     this.cameras.main.fadeOut(300);
     this.cameras.main.once('camerafadeoutcomplete', () => {
-      this.scene.start(targetScene, { spawnPoint: spawnPoint, offsetX: offsetX });
+      this.scene.start(targetScene, { 
+        spawnPoint: spawnPoint, 
+        offsetX: offsetX,
+        hasGauntlet: this.player.hasGauntlet
+      });
     });
   }
 

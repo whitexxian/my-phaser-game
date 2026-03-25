@@ -90,7 +90,11 @@ export default class UnderGroundScene extends Phaser.Scene {
       }
     }
     
-    this.player = new Player(this, playerX, playerY, "player");
+    // 获取hasGauntlet状态（如果有传递）
+    const hasGauntlet = this.scene.settings.data && (this.scene.settings.data as any).hasGauntlet || false;
+    
+    // 创建玩家
+    this.player = new Player(this, playerX, playerY, "player", hasGauntlet);
     
     // Ground2图层不设置碰撞体积
     if (ground2Layer) {
@@ -150,7 +154,11 @@ export default class UnderGroundScene extends Phaser.Scene {
     
     this.cameras.main.fadeOut(300);
     this.cameras.main.once('camerafadeoutcomplete', () => {
-      this.scene.start(targetScene, { spawnPoint: spawnPointName, offsetX: offsetX });
+      this.scene.start(targetScene, { 
+        spawnPoint: spawnPointName, 
+        offsetX: offsetX,
+        hasGauntlet: this.player.hasGauntlet
+      });
     });
   }
 

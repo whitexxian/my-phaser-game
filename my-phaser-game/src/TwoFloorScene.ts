@@ -81,8 +81,11 @@ export default class TwoFloorScene extends Phaser.Scene {
         console.warn("No trigger layer found in TwoFloorScene");
       }
     }
+   // 获取hasGauntlet状态（如果有传递）
+    const hasGauntlet = this.scene.settings.data && (this.scene.settings.data as any).hasGauntlet || false;
     
-    this.player = new Player(this, playerX, playerY, "player");
+    // 创建玩家
+    this.player = new Player(this, playerX, playerY, "player", hasGauntlet);
 
     // 5. 批量渲染 Above 层
     const aboveLayers = ["Above"];
@@ -177,6 +180,7 @@ export default class TwoFloorScene extends Phaser.Scene {
         this.scene.start(targetScene, {
           spawnPoint: spawnPoint,
           playerHealth: 3,
+          hasGauntlet: this.player.hasGauntlet,
         });
       },
     );

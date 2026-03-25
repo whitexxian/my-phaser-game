@@ -72,8 +72,13 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   // 【新增：翻滚派生攻击标志】
   private canDashAttack: boolean = false;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, texture: string) {
-    super(scene, x, y, texture);
+  constructor(scene: Phaser.Scene, x: number, y: number, texture: string, hasGauntlet: boolean = false) {
+    // 根据是否有拳套设置初始纹理
+    const initialTexture = hasGauntlet ? 'player_new' : texture;
+    super(scene, x, y, initialTexture);
+    
+    // 设置拳套状态
+    this.hasGauntlet = hasGauntlet;
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -122,6 +127,13 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private createAnimations() {
+    // 根据当前纹理创建动画
+    this.createWalkAnimations();
+    this.createRollAnimations();
+    this.createAttackAnimations();
+  }
+  
+  private createWalkAnimations() {
     // 这里的 frameRate: 8 是动画的“默认基础播放速度”
     this.anims.create({
       key: "walk-down",
@@ -159,20 +171,23 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       frameRate: 8,
       repeat: -1,
     });
-
-    // 【新增】：创建翻滚动画
+  }
+  
+  private createRollAnimations() {
+    const rollTexture = this.hasGauntlet ? "player_roll_new" : "player_roll";
+    
     this.anims.create({
       key: "roll-up",
-      frames: this.anims.generateFrameNumbers("player_roll", {
+      frames: this.anims.generateFrameNumbers(rollTexture, {
         start: 0,
         end: 3,
       }),
       frameRate: 15,
-      repeat: 0, // 翻滚只播一次
+      repeat: 0,
     });
     this.anims.create({
       key: "roll-right",
-      frames: this.anims.generateFrameNumbers("player_roll", {
+      frames: this.anims.generateFrameNumbers(rollTexture, {
         start: 4,
         end: 7,
       }),
@@ -181,7 +196,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     });
     this.anims.create({
       key: "roll-left",
-      frames: this.anims.generateFrameNumbers("player_roll", {
+      frames: this.anims.generateFrameNumbers(rollTexture, {
         start: 8,
         end: 11,
       }),
@@ -190,19 +205,22 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     });
     this.anims.create({
       key: "roll-down",
-      frames: this.anims.generateFrameNumbers("player_roll", {
+      frames: this.anims.generateFrameNumbers(rollTexture, {
         start: 12,
         end: 15,
       }),
       frameRate: 15,
       repeat: 0,
     });
-
-    // 【新增】：创建攻击动画
+  }
+  
+  private createAttackAnimations() {
+    const attackTexture = this.hasGauntlet ? "player_attack_new" : "player_attack";
+    
     // 向下攻击（第一行）
     this.anims.create({
       key: "attack_down_1",
-      frames: this.anims.generateFrameNumbers("player_attack", {
+      frames: this.anims.generateFrameNumbers(attackTexture, {
         start: 0,
         end: 1,
       }),
@@ -211,7 +229,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     });
     this.anims.create({
       key: "attack_down_2",
-      frames: this.anims.generateFrameNumbers("player_attack", {
+      frames: this.anims.generateFrameNumbers(attackTexture, {
         start: 2,
         end: 3,
       }),
@@ -220,7 +238,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     });
     this.anims.create({
       key: "attack_down_3",
-      frames: this.anims.generateFrameNumbers("player_attack", {
+      frames: this.anims.generateFrameNumbers(attackTexture, {
         start: 4,
         end: 6,
       }),
@@ -231,7 +249,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     // 向左攻击（第二行）
     this.anims.create({
       key: "attack_left_1",
-      frames: this.anims.generateFrameNumbers("player_attack", {
+      frames: this.anims.generateFrameNumbers(attackTexture, {
         start: 7,
         end: 8,
       }),
@@ -240,7 +258,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     });
     this.anims.create({
       key: "attack_left_2",
-      frames: this.anims.generateFrameNumbers("player_attack", {
+      frames: this.anims.generateFrameNumbers(attackTexture, {
         start: 9,
         end: 10,
       }),
@@ -249,7 +267,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     });
     this.anims.create({
       key: "attack_left_3",
-      frames: this.anims.generateFrameNumbers("player_attack", {
+      frames: this.anims.generateFrameNumbers(attackTexture, {
         start: 11,
         end: 13,
       }),
@@ -260,7 +278,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     // 向右攻击（第三行）
     this.anims.create({
       key: "attack_right_1",
-      frames: this.anims.generateFrameNumbers("player_attack", {
+      frames: this.anims.generateFrameNumbers(attackTexture, {
         start: 14,
         end: 15,
       }),
@@ -269,7 +287,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     });
     this.anims.create({
       key: "attack_right_2",
-      frames: this.anims.generateFrameNumbers("player_attack", {
+      frames: this.anims.generateFrameNumbers(attackTexture, {
         start: 16,
         end: 17,
       }),
@@ -278,7 +296,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     });
     this.anims.create({
       key: "attack_right_3",
-      frames: this.anims.generateFrameNumbers("player_attack", {
+      frames: this.anims.generateFrameNumbers(attackTexture, {
         start: 18,
         end: 20,
       }),
@@ -289,7 +307,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     // 向上攻击（第四行）
     this.anims.create({
       key: "attack_up_1",
-      frames: this.anims.generateFrameNumbers("player_attack", {
+      frames: this.anims.generateFrameNumbers(attackTexture, {
         start: 21,
         end: 22,
       }),
@@ -298,7 +316,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     });
     this.anims.create({
       key: "attack_up_2",
-      frames: this.anims.generateFrameNumbers("player_attack", {
+      frames: this.anims.generateFrameNumbers(attackTexture, {
         start: 23,
         end: 24,
       }),
@@ -307,7 +325,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     });
     this.anims.create({
       key: "attack_up_3",
-      frames: this.anims.generateFrameNumbers("player_attack", {
+      frames: this.anims.generateFrameNumbers(attackTexture, {
         start: 25,
         end: 27,
       }),
@@ -500,7 +518,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       // 6. 【核心机制】：翻滚的结束判定
       // 方法 A：用物理减速 (阻力)，等速度降为 0 结束。
       // 方法 B (推荐)：用时间。假设翻滚持续 0.4 秒 (400毫秒)。
-      this.scene.time.delayedCall(250, () => {
+      this.scene.time.delayedCall(187.5, () => {
           this.endRoll();
       });
   }
@@ -519,8 +537,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       this.isInvincible = false;
       this.setAlpha(1); // 恢复不透明
       
-      // 3. 切换回player的spritesheet并设置默认站姿
-      this.setTexture("player");
+      // 2. 切换回对应的spritesheet并设置默认站姿
+      this.setTexture(this.hasGauntlet ? "player_new" : "player");
       this.anims.stop();
       if (this.currentDirection === "down") this.setFrame(0);
       else if (this.currentDirection === "left") this.setFrame(4);
@@ -597,11 +615,24 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.hasGauntlet = true;
     console.log("获得拳套！外观改变，解锁翻滚派生重击！");
     
-    // 假设你加载了新图纸 'player-gauntlet'
-    this.setTexture('player-gauntlet');
+    // 保存当前玩家状态
+    const playerState = {
+      x: this.x,
+      y: this.y,
+      direction: this.currentDirection,
+      sceneName: this.scene.sys.config,
+      hasGauntlet: this.hasGauntlet
+    };
     
-    // 如果你的新图纸排版和原来一样，你需要在这里重新 createAnimations()
-    // 覆盖掉旧的动画缓存 (实际项目中会换成带前缀的新动画 key)
+    // 保存状态到全局
+    if (!(this.scene.game as any).globalState) {
+      (this.scene.game as any).globalState = {};
+    }
+    (this.scene.game as any).globalState.playerState = playerState;
+    
+    // 刷新当前场景以确保立即生效
+    console.log("刷新场景以应用拳套外观...");
+    this.scene.scene.restart();
   }
 
   // ==========================================
@@ -613,8 +644,8 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       // 恢复正常状态
       this.currentState = PlayerState.IDLE;
       
-      // 切换回player的spritesheet
-      this.setTexture("player");
+      // 切换回对应的spritesheet
+      this.setTexture(this.hasGauntlet ? "player_new" : "player");
       
       // 攻击结束后回到对应方向的默认站姿（走路动画的第一帧）
       this.anims.stop();
@@ -637,7 +668,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   // ==========================================
   private createHitbox(damage: number) {
       // 1. 拳头应该出现在玩家面前多远？
-      const attackRange = 24; // 距离玩家中心 24 像素
+      let attackRange = 24; // 距离玩家中心 24 像素
+      if (this.comboCount === 3){
+        attackRange = 35
+      }
 
       // 根据玩家面朝的方向，计算拳头生成的世界坐标
       const hitboxX = this.x + this.lastFacingDir.x * attackRange;
