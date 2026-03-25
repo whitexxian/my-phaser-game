@@ -4,6 +4,7 @@ import Player from "./Player";
 export default class HouseScene extends Phaser.Scene {
   private player!: Player;
   private map!: Phaser.Tilemaps.Tilemap;
+  private activeInteractZone: string = "";
 
   constructor() {
     super("HouseScene");
@@ -85,6 +86,8 @@ export default class HouseScene extends Phaser.Scene {
             playerY -= 30; // 向上偏移30像素
           } else if (spawnPoint === "ladder_to_2floor") {
             playerY += 30; // 向下偏移30像素
+          } else if (spawnPoint === "ladder_from_underground") {
+            playerX -= 16; // 向左偏移16像素
           }
         } else {
           console.warn(`Spawn point ${spawnPoint} not found in HouseScene`);
@@ -130,54 +133,33 @@ export default class HouseScene extends Phaser.Scene {
     // ==========================================    
     // 【核心新增：解析 Tiled 里的隐形传送门！】
     // ==========================================
+    const interactZones = this.physics.add.staticGroup();
 
     if (triggerLayer && triggerLayer.objects) {
       // 遍历这个层里的所有对象 (我们刚才画的矩形框)
       triggerLayer.objects.forEach((obj) => {
-        // 如果这个矩形的名字叫 'door_to_overworld'
-        if (obj.name === "door_to_overworld") {
-          // 把 Tiled 里的矩形数据，转换成 Phaser 里的不可见物理盒子
-          // 注意 Tiled 对象的坐标基准点在左下角，所以 Y 要加上高度的一半
-          const doorZone = this.add.zone(
-            obj.x! + obj.width! / 2,
-            obj.y! + obj.height! / 2,
-            obj.width!,
-            obj.height!,
-          );
+        const zone = this.add.zone(
+          obj.x! + obj.width! / 2,
+          obj.y! + obj.height! / 2,
+          obj.width!,
+          obj.height!,
+        );
 
-          // 给这个空气盒子加上物理引擎
-          this.physics.add.existing(doorZone, true); // true 代表是静态物体
+        // 给这个空气盒子加上物理引擎
+        this.physics.add.existing(zone, true); // true 代表是静态物体
+        zone.name = obj.name;
+        interactZones.add(zone);
+      });
+    }
 
-          // 【魔法时刻：设置重叠检测 (Overlap)】
-          // 当玩家 (player) 和这个空气盒子 (doorZone) 重叠时，执行 enterHouse 函数！
-          this.physics.add.overlap(
-            this.player,
-            doorZone,
-            this.enterHouse,
-            undefined,
-            this,
-          );
-        }
+    // 交互检测
+    this.physics.add.overlap(this.player, interactZones, this.onInteractZone, undefined, this);
 
-        // 处理前往二楼的楼梯
-        if (obj.name === "ladder_to_2floor") {
-          const ladderZone = this.add.zone(
-            obj.x! + obj.width! / 2,
-            obj.y! + obj.height! / 2,
-            obj.width!,
-            obj.height!,
-          );
-
-          this.physics.add.existing(ladderZone, true);
-
-          this.physics.add.overlap(
-            this.player,
-            ladderZone,
-            this.goTo2Floor,
-            undefined,
-            this,
-          );
-        }
+    // 交互按键（仅用于门和其他梯子）
+    if (this.input.keyboard) {
+      const fKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.F);
+      fKey.on('down', () => {
+        this.handleInteract();
       });
     }
 
@@ -202,50 +184,47 @@ export default class HouseScene extends Phaser.Scene {
     this.player.update();
   }
 
-  // ==========================================
-  // 【切场景的特效与逻辑】
-  // ==========================================
-  private enterHouse() {
-    // 防止玩家反复踩门触发多次
-    this.player.body!.enable = false; // 暂停玩家的物理系统
-    this.player.setVelocity(0); // 让玩家停下
-
-    // 面试加分项：加入一个“淡出 (Fade Out)”的黑屏转场特效！
-    this.cameras.main.fadeOut(500, 0, 0, 0); // 500毫秒内，画面变黑
-
-    // 监听淡出完成的事件
-    this.cameras.main.once(
-      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-      () => {
-        console.log("正在返回外部世界...");
-
-        // 停止当前房屋场景，启动外部世界场景！
-        this.scene.start("GameScene", {
-          spawnPoint: "door_to_house",
-          playerHealth: 3, // 【重要】把当前的血量传给下一个场景！
-        });
-      },
-    );
+  // 交互区域检测
+  private onInteractZone(_player: any, zone: any) {
+    this.activeInteractZone = zone.name;
   }
 
-  // 前往二楼
-  private goTo2Floor() {
-    // 防止玩家反复踩楼梯触发多次
-    this.player.body!.enable = false; // 暂停玩家的物理系统
-    this.player.setVelocity(0); // 让玩家停下
+  // 交互处理
+  private handleInteract() {
+    // 返回地面
+    if (this.activeInteractZone === "door_to_overworld") {
+      this.switchScene("GameScene", "door_to_house");
+    }
+    // 前往二楼
+    else if (this.activeInteractZone === "ladder_to_2floor") {
+      this.switchScene("TwoFloorScene", "ladder_to_house");
+    }
+    // 前往地下
+    else if (this.activeInteractZone === "ladder_to_chest") {
+      this.switchScene("UnderGroundScene", "ladder_to_chest");
+    }
+    // 从地下返回
+    else if (this.activeInteractZone === "ladder_from_underground") {
+      this.switchScene("UnderGroundScene", "ladder_to_chest");
+    }
+  }
 
-    // 面试加分项：加入一个“淡出 (Fade Out)”的黑屏转场特效！
-    this.cameras.main.fadeOut(500, 0, 0, 0); // 500毫秒内，画面变黑
+  // 切换场景的通用方法
+  private switchScene(targetScene: string, spawnPoint: string) {
+    // 防止玩家反复触发多次
+    this.player.body!.enable = false;
+    this.player.setVelocity(0);
+
+    // 淡出特效
+    this.cameras.main.fadeOut(500, 0, 0, 0);
 
     // 监听淡出完成的事件
     this.cameras.main.once(
       Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
       () => {
-        console.log("正在前往二楼...");
-
-        // 停止当前房屋场景，启动二楼场景！
-        this.scene.start("TwoFloorScene", {
-          spawnPoint: "ladder_to_house",
+        console.log(`正在前往${targetScene}...`);
+        this.scene.start(targetScene, {
+          spawnPoint: spawnPoint,
           playerHealth: 3, // 【重要】把当前的血量传给下一个场景！
         });
       },

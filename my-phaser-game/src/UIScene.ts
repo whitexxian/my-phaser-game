@@ -30,11 +30,11 @@ export default class UIScene extends Phaser.Scene {
     // 监听来自全局游戏管理器的“玩家受伤/回血”事件
     // 这样只要其他场景喊一声 "update-health"，UI就会自动更新
     this.game.events.on("update-health", this.updateHealthUI, this);
-    // 【新增】：监听生命上限增加
-    this.game.events.on('upgrade-max-health', () => {
-      this.maxHealth++;
-      this.currentHealth = this.maxHealth; // 升级血量同时回满血
-      this.drawHearts(); // 重新画 UI
+    // 监听生命上限增加事件
+    this.game.events.on('update-max-health', (newMaxHealth: number, newCurrentHealth: number) => {
+      this.maxHealth = newMaxHealth;
+      this.currentHealth = newCurrentHealth;
+      this.drawHearts();
     });
     
     // 创建Boss血条

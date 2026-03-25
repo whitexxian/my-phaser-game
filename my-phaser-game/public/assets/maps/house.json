@@ -68,7 +68,6 @@
         {
          "draworder":"topdown",
          "id":5,
-         "locked":true,
          "name":"Triggers",
          "objects":[
                 {
@@ -84,31 +83,19 @@
                  "y":142.333
                 }, 
                 {
-                 "height":16,
-                 "id":3,
-                 "name":"ladder_to_2floor",
-                 "opacity":1,
-                 "rotation":0,
-                 "type":"ladder",
-                 "visible":true,
-                 "width":13.3333,
-                 "x":141,
-                 "y":15.6667
-                }, 
-                {
-                 "height":34.3333333333333,
+                 "height":34.3333,
                  "id":7,
                  "name":"chest_gauntlet",
                  "opacity":1,
                  "rotation":0,
                  "type":"chest",
                  "visible":true,
-                 "width":35.3333333333333,
-                 "x":23.3333333333333,
-                 "y":22.3333333333333
+                 "width":35.3333,
+                 "x":23.3333,
+                 "y":22.3333
                 }, 
                 {
-                 "height":15.6666666666667,
+                 "height":15.6667,
                  "id":8,
                  "name":"ladder_from_underground",
                  "opacity":1,
@@ -127,12 +114,12 @@
                  "rotation":0,
                  "type":"",
                  "visible":true,
-                 "width":7.33333333333333,
-                 "x":120.333333333333,
+                 "width":7.33333,
+                 "x":120.333,
                  "y":16
                 }, 
                 {
-                 "height":32.3333333333333,
+                 "height":32.3333,
                  "id":11,
                  "name":"zone_unlock",
                  "opacity":1,
@@ -140,19 +127,31 @@
                  "type":"",
                  "visible":true,
                  "width":33,
-                 "x":87.3333333333333,
-                 "y":15.6666666666667
+                 "x":87.3333,
+                 "y":15.6667
                 }, 
                 {
-                 "height":32.3333333333333,
+                 "height":32.3333,
                  "id":12,
                  "name":"zone_locked",
                  "opacity":1,
                  "rotation":0,
                  "type":"",
                  "visible":true,
-                 "width":7.66666666666666,
+                 "width":7.66667,
                  "x":128,
+                 "y":15.6667
+                }, 
+                {
+                 "height":20,
+                 "id":15,
+                 "name":"ladder_to_2floor",
+                 "opacity":1,
+                 "rotation":0,
+                 "type":"ladder",
+                 "visible":true,
+                 "width":17.6666666666667,
+                 "x":136.666666666667,
                  "y":15.6666666666667
                 }],
          "opacity":1,
@@ -183,7 +182,7 @@
          "y":0
         }],
  "nextlayerid":6,
- "nextobjectid":13,
+ "nextobjectid":22,
  "orientation":"orthogonal",
  "renderorder":"right-down",
  "tiledversion":"1.12.0",

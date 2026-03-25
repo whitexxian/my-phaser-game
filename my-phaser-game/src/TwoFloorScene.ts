@@ -4,6 +4,7 @@ import Player from "./Player";
 export default class TwoFloorScene extends Phaser.Scene {
   private player!: Player;
   private map!: Phaser.Tilemaps.Tilemap;
+  private activeInteractZone: string = "";
 
   constructor() {
     super("TwoFloorScene");
@@ -111,48 +112,30 @@ export default class TwoFloorScene extends Phaser.Scene {
     this.cameras.main.setRoundPixels(true);
 
     // 8. 解析 Tiled 里的触发器
+    const interactZones = this.physics.add.staticGroup();
 
     if (triggerLayer && triggerLayer.objects) {
       triggerLayer.objects.forEach((obj) => {
-        // 处理返回一楼的楼梯
-        if (obj.name === "ladder_to_house") {
-          const ladderZone = this.add.zone(
-            obj.x! + obj.width! / 2,
-            obj.y! + obj.height! / 2,
-            obj.width!,
-            obj.height!,
-          );
+        const zone = this.add.zone(
+          obj.x! + obj.width! / 2,
+          obj.y! + obj.height! / 2,
+          obj.width!,
+          obj.height!,
+        );
 
-          this.physics.add.existing(ladderZone, true);
+        this.physics.add.existing(zone, true);
+        zone.name = obj.name;
+        interactZones.add(zone);
+      });
+    }
 
-          this.physics.add.overlap(
-            this.player,
-            ladderZone,
-            this.goToHouse,
-            undefined,
-            this,
-          );
-        }
+    // 交互检测
+    this.physics.add.overlap(this.player, interactZones, this.onInteractZone, undefined, this);
 
-        // 处理通往三楼（天桥）的楼梯
-        if (obj.name === "ladder_to_3floor") {
-          const ladderZone = this.add.zone(
-            obj.x! + obj.width! / 2,
-            obj.y! + obj.height! / 2,
-            obj.width!,
-            obj.height!,
-          );
-
-          this.physics.add.existing(ladderZone, true);
-
-          this.physics.add.overlap(
-            this.player,
-            ladderZone,
-            this.goToBridge,
-            undefined,
-            this,
-          );
-        }
+    // 交互按键
+    if (this.input.keyboard) {
+      this.input.keyboard.on('keydown-F', () => {
+        this.handleInteract();
       });
     }
 
@@ -163,27 +146,25 @@ export default class TwoFloorScene extends Phaser.Scene {
     this.player.update();
   }
 
-  // 返回一楼
-  private goToHouse() {
-    this.player.body!.enable = false;
-    this.player.setVelocity(0);
-
-    this.cameras.main.fadeOut(500, 0, 0, 0);
-
-    this.cameras.main.once(
-      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-      () => {
-        console.log("正在返回一楼...");
-        this.scene.start("HouseScene", {
-          spawnPoint: "ladder_to_2floor",
-          playerHealth: 3,
-        });
-      },
-    );
+  // 交互区域检测
+  private onInteractZone(_player: any, zone: any) {
+    this.activeInteractZone = zone.name;
   }
 
-  // 前往三楼（天桥）
-  private goToBridge() {
+  // 交互处理
+  private handleInteract() {
+    // 返回一楼
+    if (this.activeInteractZone === "ladder_to_house") {
+      this.switchScene("HouseScene", "ladder_to_2floor");
+    }
+    // 前往三楼（天桥）
+    else if (this.activeInteractZone === "ladder_to_3floor") {
+      this.switchScene("GameScene", "trigger_on_bridge");
+    }
+  }
+
+  // 切换场景的通用方法
+  private switchScene(targetScene: string, spawnPoint: string) {
     this.player.body!.enable = false;
     this.player.setVelocity(0);
 
@@ -192,9 +173,9 @@ export default class TwoFloorScene extends Phaser.Scene {
     this.cameras.main.once(
       Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
       () => {
-        console.log("正在前往天桥...");
-        this.scene.start("GameScene", {
-          spawnPoint: "trigger_on_bridge",
+        console.log(`正在前往${targetScene}...`);
+        this.scene.start(targetScene, {
+          spawnPoint: spawnPoint,
           playerHealth: 3,
         });
       },

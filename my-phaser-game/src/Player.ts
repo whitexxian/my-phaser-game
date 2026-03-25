@@ -45,6 +45,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   
   // 【新增属性】
   public health: number = 3; // 玩家有 3 颗心
+  public maxHealth: number = 3; // 最大生命值
   private isHurt: boolean = false; // 受伤硬直标志
   
   // 影子

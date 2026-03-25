@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import GameScene from "./GameScene";
 import HouseScene from "./HouseScene";
 import TwoFloorScene from "./TwoFloorScene";
+import UnderGroundScene from "./UnderGroundScene";
 import UIScene from "./UIScene";
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -19,10 +20,10 @@ const config: Phaser.Types.Core.GameConfig = {
     default: "arcade",
     arcade: {
       gravity: { x: 0, y: 0 },
-      debug: true, // 保持开启，方便观察碰撞框
+      debug: false, // 保持开启，方便观察碰撞框
     },
   },
-  scene: [GameScene, HouseScene, TwoFloorScene, UIScene],
+  scene: [GameScene, HouseScene, TwoFloorScene, UnderGroundScene, UIScene],
 };
 
 new Phaser.Game(config);

@@ -90,6 +90,8 @@ export default class GameScene extends Phaser.Scene {
       this.isDoorOpen = true;
       console.log("门已经被打开，保持打开状态");
     }
+    
+
 
     // ==========================================
     // 【核心修改：用数组管理多图层】
@@ -103,6 +105,15 @@ export default class GameScene extends Phaser.Scene {
       if (layer) {
         if (layerName === "Ground1" || layerName === "Ground2") {
           layer.setDepth(0); // 地面层在最底层
+          
+          // 将区域中id为1959的替换为1960
+          if (layerName === "Ground2") {
+            layer.forEachTile(tile => {
+              if (tile.index === 1959) {
+                layer.putTileAt(1960, tile.x, tile.y);
+              }
+            });
+          }
         } else if (layerName === "Block") {
           layer.setDepth(1); // Block图层在地面层之上，玩家之下，确保碰撞检测正常
           this.blockLayer = layer;
@@ -136,6 +147,22 @@ export default class GameScene extends Phaser.Scene {
 
     // 从 JSON 地图里，找到我们刚才建的叫 'Triggers' 的对象层
     let triggerLayer = this.map.getObjectLayer("Triggers");
+    
+    // 恢复打开的宝箱状态（必须在Walls2图层创建之后）
+    if ((this.game as any).globalState && (this.game as any).globalState.openedChests) {
+      this.openedChests = new Set((this.game as any).globalState.openedChests);
+      console.log("恢复打开的宝箱状态:", Array.from(this.openedChests));
+      
+      // 直接显示已经打开的宝箱
+      if (triggerLayer && triggerLayer.objects && this.walls2Layer) {
+        triggerLayer.objects.forEach(obj => {
+          if (obj.name.startsWith('chest_') && this.openedChests.has(obj.name)) {
+            this.walls2Layer.putTileAtWorldXY(1958, obj.x! + obj.width! / 2, obj.y! + obj.height! / 2);
+            this.walls2Layer.setCollisionByExclusion([-1]);
+          }
+        });
+      }
+    }
 
     // 4. 创建玩家 (必须在 Ground 和 Wall 之后，Above 之前)
     // 根据spawnPoint设置玩家位置
@@ -172,15 +199,15 @@ export default class GameScene extends Phaser.Scene {
     // 怪物流血时会发送 'heal-player' 事件
     // ==========================================
     this.game.events.on('heal-player', (amount: number) => {
-      if (this.player.health < 99) { // 假设最大血量为99
-        this.player.health += amount;
-        console.log(`吸血触发！回复 ${amount} 血量`);
-        this.game.events.emit('update-health', this.player.health);
-        
-        // 给玩家身上爆一个绿色的回血数字特效
-        const healText = this.add.text(this.player.x, this.player.y - 20, `+${amount}`, { color: '#00ff00', fontSize: '16px' });
-        this.tweens.add({ targets: healText, y: '-=30', alpha: 0, duration: 1000, onComplete: () => healText.destroy() });
-      }
+        if (this.player.health < this.player.maxHealth) {
+            this.player.health += amount;
+            console.log(`吸血触发！回复 ${amount} 血量`);
+            this.game.events.emit('update-health', this.player.health);
+            
+            // 给玩家身上爆一个绿色的回血数字特效
+            const healText = this.add.text(this.player.x, this.player.y - 20, `+${amount}`, { color: '#00ff00', fontSize: '16px' });
+            this.tweens.add({ targets: healText, y: '-=30', alpha: 0, duration: 1000, onComplete: () => healText.destroy() });
+        }
     });
     
     // 创建敌人组
@@ -312,30 +339,7 @@ export default class GameScene extends Phaser.Scene {
     if (triggerLayer && triggerLayer.objects) {
       // 遍历这个层里的所有对象 (我们刚才画的矩形框)
       triggerLayer.objects.forEach((obj) => {
-        // 如果这个矩形的名字叫 'door_to_house'
-        if (obj.name === "door_to_house") {
-          // 把 Tiled 里的矩形数据，转换成 Phaser 里的不可见物理盒子
-          // 注意 Tiled 对象的坐标基准点在左下角，所以 Y 要加上高度的一半
-          const doorZone = this.add.zone(
-            obj.x! + obj.width! / 2,
-            obj.y! + obj.height! / 2,
-            obj.width!,
-            obj.height!,
-          );
-
-          // 给这个空气盒子加上物理引擎
-          this.physics.add.existing(doorZone, true); // true 代表是静态物体
-
-          // 【魔法时刻：设置重叠检测 (Overlap)】
-          // 当玩家 (player) 和这个空气盒子 (doorZone) 重叠时，执行 enterHouse 函数！
-          this.physics.add.overlap(
-            this.player,
-            doorZone,
-            this.enterHouse,
-            undefined,
-            this,
-          );
-        }
+        // door_to_house 现在由交互系统处理
 
         // 处理天桥上的触发器
         if (obj.name === "trigger_on_bridge") {
@@ -412,8 +416,8 @@ export default class GameScene extends Phaser.Scene {
                     this.doorSolid.destroy();
                 }
             }
-            else if (obj.name === 'zone_locked' || obj.name === 'zone_unlock') {
-                // 把这两个交互区加到组里
+            else if (obj.name === 'zone_locked' || obj.name === 'zone_unlock' || obj.name.startsWith('chest_') || obj.name.startsWith('ladder_') || obj.name.startsWith('door_')) {
+                // 把交互区加到组里
                 zone.name = obj.name; // 把名字传给物理盒子
                 interactZones.add(zone);
             }
@@ -510,11 +514,42 @@ export default class GameScene extends Phaser.Scene {
         if (this.activeInteractZone.startsWith('chest_') && !this.openedChests.has(this.activeInteractZone)) {
             
             this.openedChests.add(this.activeInteractZone);
-            // 视觉：你可以把宝箱的图块从“关”换成“开”(参考上节开门代码)
+            
+            // 保存打开状态到全局
+            if (!(this.game as any).globalState) {
+                (this.game as any).globalState = {};
+            }
+            (this.game as any).globalState.openedChests = Array.from(this.openedChests);
+            console.log("宝箱打开状态已保存到全局");
+            
+            // 视觉：把宝箱的图块从“关”换成“开”
+            if (this.activeInteractZone === 'chest_hp') {
+                const triggerLayer = this.map.getObjectLayer('Triggers');
+                if (triggerLayer && triggerLayer.objects) {
+                    const chestObject = triggerLayer.objects.find(obj => obj.name === 'chest_hp');
+                    if (chestObject) {
+                        const walls2Layer = this.map.getLayer('Walls2')!.tilemapLayer;
+                        if (walls2Layer) {
+                            // 确保在Walls2层替换图块
+                            walls2Layer.putTileAtWorldXY(1958, chestObject.x! + chestObject.width! / 2, chestObject.y! + chestObject.height! / 2);
+                            
+                            // 重新设置碰撞，确保新放置的图块有碰撞体积
+                            walls2Layer.setCollisionByExclusion([-1]);
+                            
+                            // 确保Walls2层的碰撞始终开启
+                            if (this.walls2Collider) {
+                                this.walls2Collider.active = true;
+                            }
+                        }
+                    }
+                }
+            }
 
             if (this.activeInteractZone === 'chest_hp') {
-                console.log("获得【生命药水】！最大生命值 +1");
-                this.game.events.emit('upgrade-max-health');
+                this.player.maxHealth++;
+                this.player.health = this.player.maxHealth; // 升级血量同时回满血
+                // 发送新的事件，直接传递新的最大值和当前值
+                this.game.events.emit('update-max-health', this.player.maxHealth, this.player.health);
             }
             else if (this.activeInteractZone === 'chest_gauntlet') {
                 console.log("获得【破岩拳套】！翻滚后可直接派生重击！");
@@ -577,6 +612,14 @@ export default class GameScene extends Phaser.Scene {
                 }
             }
         }
+        // 进入房子
+        else if (this.activeInteractZone === 'door_to_house') {
+            this.switchScene("HouseScene", "door_to_overworld", -30);
+        }
+        // 从地面进入地下
+        else if (this.activeInteractZone === 'ladder_to_underground') {
+            this.switchScene("UnderGroundScene", "ladder_from_overworld", -16);
+        }
     }
   }
 
@@ -584,36 +627,21 @@ export default class GameScene extends Phaser.Scene {
   private onInteractZone(_player: any, zone: any) {
     this.activeInteractZone = zone.name;
   }
-
-
-
-  // ==========================================
-  // 【切场景的特效与逻辑】
-  // ==========================================
-  private enterHouse() {
-    // 防止玩家反复踩门触发多次
-    this.player.body!.enable = false; // 暂停玩家的物理系统
-    this.player.setVelocity(0); // 让玩家停下
-
-    // 面试加分项：加入一个“淡出 (Fade Out)”的黑屏转场特效！
-    this.cameras.main.fadeOut(500, 0, 0, 0); // 500毫秒内，画面变黑
-
-    // 监听淡出完成的事件
-    this.cameras.main.once(
-      Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE,
-      () => {
-        console.log("正在进入房屋...");
-
-        // 停止当前大地图场景，启动房屋内部场景！
-        // (你需要去新建一个 HouseScene.ts，代码结构和 GameScene 几乎一样)
-        // 并且可以通过传递数据，告诉 HouseScene 玩家是从哪个门进来的
-        this.scene.start("HouseScene", {
-          spawnPoint: "door_to_overworld",
-          playerHealth: 3, // 【重要】把当前的血量传给下一个场景！
-        });
-      },
-    );
+  
+  // 切换场景的通用方法
+  private switchScene(targetScene: string, spawnPoint: string, offsetX: number) {
+    this.player.body!.enable = false;
+    this.player.setVelocity(0);
+    
+    this.cameras.main.fadeOut(300);
+    this.cameras.main.once('camerafadeoutcomplete', () => {
+      this.scene.start(targetScene, { spawnPoint: spawnPoint, offsetX: offsetX });
+    });
   }
+
+
+
+
 
   // 当玩家在天桥上时
   private onBridge() {
