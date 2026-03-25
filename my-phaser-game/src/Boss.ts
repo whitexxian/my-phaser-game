@@ -26,10 +26,14 @@ export default class Boss extends Enemy {
     // 削韧/破防系统
     private poiseDamageTaken: number = 0; // 累计受到的削韧值 (假设玩家每打一拳累计 1 点)
     private readonly POISE_THRESHOLD: number = 3; // 承受 3 拳后破防
+    
+    // 累计伤害统计（用于调试）
+    private totalDamageTaken: number = 0;
 
     constructor(scene: Phaser.Scene, x: number, y: number, texture: string) {
         // 指定使用第一个帧（帧索引0），避免显示整个精灵图
         super(scene, x, y, texture, 0);
+        console.log("Boss构造函数被调用");
 
         this.setScale(2); // 放大Boss体型
         this.body?.setSize(32, 32); // 精灵大小是32x32，缩放2倍后碰撞体大小应该匹配
@@ -71,6 +75,8 @@ export default class Boss extends Enemy {
     public override takeDamage(damage: number, _attackerDirection: Phaser.Math.Vector2, _comboCount: number = 1) {
         if (this.currentState === BossState.DEAD) return;
 
+        console.log(`Boss受到伤害: ${damage}, 当前状态: ${this.currentState}`);
+
         // 1. 虚弱期伤害 * 1.2 倍修正！
         let finalDamage = damage;
         if (this.currentState === BossState.STAGGERED) {
@@ -78,6 +84,9 @@ export default class Boss extends Enemy {
             console.log(`虚弱暴击！造成 ${finalDamage} 伤害`);
         }
 
+        // 累计伤害（用于调试）
+        this.totalDamageTaken += finalDamage;
+        
         this.health -= finalDamage;
         this.setTint(0xff0000);
         this.scene.time.delayedCall(100, () => { if (this.currentState !== BossState.STAGGERED && this.currentState !== BossState.DEAD) this.clearTint(); });
@@ -291,7 +300,8 @@ export default class Boss extends Enemy {
     protected updateHealthBar() {
         this.scene.game.events.emit('update-boss-health', {
             health: this.health,
-            maxHealth: this.maxHealth
+            maxHealth: this.maxHealth,
+            totalDamageTaken: this.totalDamageTaken
         });
     }
     

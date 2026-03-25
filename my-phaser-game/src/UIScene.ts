@@ -11,6 +11,7 @@ export default class UIScene extends Phaser.Scene {
   private bossMaxHealth: number = 20;
   private bossCurrentHealth: number = 20;
   private bossNameText!: Phaser.GameObjects.Text;
+  private bossDamageText!: Phaser.GameObjects.Text;
 
   constructor() {
     // 给这个场景起个名字叫 'UIScene'
@@ -82,7 +83,7 @@ export default class UIScene extends Phaser.Scene {
   }
   
   // Boss血条相关方法
-  private updateBossHealthUI(data: { health: number; maxHealth: number }) {
+  private updateBossHealthUI(data: { health: number; maxHealth: number; totalDamageTaken?: number }) {
     this.bossCurrentHealth = data.health;
     this.bossMaxHealth = data.maxHealth;
     
@@ -118,11 +119,27 @@ export default class UIScene extends Phaser.Scene {
     nameText.setScrollFactor(0);
     nameText.setDepth(1001);
     
-    // 保存名字文本引用以便后续销毁
+    // 绘制累计伤害文本
+    const damageText = this.add.text(x + width / 2, y - 40, `累计伤害: ${data.totalDamageTaken?.toFixed(1) || 0}`, {
+      fontSize: '14px',
+      fontFamily: 'Arial',
+      color: '#ffff00',
+      align: 'center'
+    });
+    damageText.setOrigin(0.5);
+    damageText.setScrollFactor(0);
+    damageText.setDepth(1001);
+    
+    // 保存文本引用以便后续销毁
     if (this.bossNameText) {
       this.bossNameText.destroy();
     }
     this.bossNameText = nameText;
+    
+    if (this.bossDamageText) {
+      this.bossDamageText.destroy();
+    }
+    this.bossDamageText = damageText;
   }
   
   private showBossHealthBar() {
@@ -133,6 +150,9 @@ export default class UIScene extends Phaser.Scene {
     this.bossHealthBar.setVisible(false);
     if (this.bossNameText) {
       this.bossNameText.destroy();
+    }
+    if (this.bossDamageText) {
+      this.bossDamageText.destroy();
     }
   }
 }

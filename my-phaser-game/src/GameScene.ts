@@ -14,10 +14,15 @@ export default class GameScene extends Phaser.Scene {
   private walls1Collider!: Phaser.Physics.Arcade.Collider;
   private walls2Collider!: Phaser.Physics.Arcade.Collider;
   private blockCollider!: Phaser.Physics.Arcade.Collider;
+  private enemyPlayerOverlap!: Phaser.Physics.Arcade.Collider;
+  private enemyWallsCollider!: Phaser.Physics.Arcade.Collider;
+  private bossWallsCollider!: Phaser.Physics.Arcade.Collider;
+  private bossPlayerOverlap!: Phaser.Physics.Arcade.Collider;
   
   // 敌人相关
   private enemies!: Phaser.Physics.Arcade.Group;
   private myBoss!: Boss; // Boss引用
+  private bossesGroup!: Phaser.Physics.Arcade.Group;
   
   
   // 【魂系单向门系统】
@@ -240,20 +245,25 @@ export default class GameScene extends Phaser.Scene {
     this.enemies.add(slime);
     
     // 为敌人设置与地面的碰撞
-    this.physics.add.collider(this.enemies, [this.walls1Layer, this.walls2Layer]);
+    this.enemyWallsCollider = this.physics.add.collider(this.enemies, [this.walls1Layer, this.walls2Layer]);
     
     // 【极其重要】：屏蔽浏览器的右键菜单，否则一按右键就弹出网页选项！
     this.input.mouse!.disableContextMenu();
     
+    // 清理所有现有的Boss实例
+    console.log("清理残留的Boss实例");
+    
     // 创建Boss
+    console.log("创建Boss实例:", this.myBoss ? "已存在" : "新创建");
     this.myBoss = new Boss(this, playerX + 200, playerY + 200, "enemy1");
     this.myBoss.setTarget(this.player);
-    const bossesGroup = this.physics.add.group({ runChildUpdate: true });
-    bossesGroup.add(this.myBoss);
-    this.physics.add.collider(bossesGroup, [this.walls1Layer, this.walls2Layer]);
+    this.bossesGroup = this.physics.add.group({ runChildUpdate: true });
+    this.bossesGroup.add(this.myBoss);
+    this.bossWallsCollider = this.physics.add.collider(this.bossesGroup, [this.walls1Layer, this.walls2Layer]);
+    console.log("Boss创建完成，当前Boss实例数量:", this.bossesGroup.getChildren().length);
     
     // Boss 触碰伤害 (0.5格血)
-    this.physics.add.overlap(this.player, bossesGroup, (p, b) => {
+    this.bossPlayerOverlap = this.physics.add.overlap(this.player, this.bossesGroup, (p, b) => {
         const boss = b as Boss;
         if (!boss.isStaggered()) { // 虚弱时碰它不掉血
             (p as Player).takeDamage(boss.getContactDamage(), boss.x, boss.y);
@@ -261,6 +271,7 @@ export default class GameScene extends Phaser.Scene {
     });
     
     // 监听 Boss 的 AOE 技能 1
+    this.events.removeAllListeners('boss-aoe');
     this.events.on('boss-aoe', (zone: any, damage: number) => {
         this.physics.overlap(this.player, zone, () => {
             this.player.takeDamage(damage, zone.x, zone.y);
@@ -268,6 +279,7 @@ export default class GameScene extends Phaser.Scene {
     });
     
     // 监听 Boss 的召唤技能 2
+    this.events.removeAllListeners('boss-summon');
     this.events.on('boss-summon', (bx: number, by: number) => {
         console.log("Boss 召唤了小怪！");
         // 在 Boss 身边刷两只普通 Enemy
@@ -327,7 +339,7 @@ export default class GameScene extends Phaser.Scene {
     // 【核心新增：处理小怪碰触玩家的伤害判定】
     // ==========================================
     // 不要用 collider (那会像推箱子)，要用 overlap 配合专用的击退逻辑
-    this.physics.add.overlap(this.player, this.enemies, (p, e) => {
+    this.enemyPlayerOverlap = this.physics.add.overlap(this.player, this.enemies, (p, e) => {
         const enemy = e as any;
         const player = p as any;
         
@@ -468,9 +480,14 @@ export default class GameScene extends Phaser.Scene {
     // 【核心新增：充当攻击裁判】
     // 监听玩家发出的 'player-attack' 信号
     // ==========================================
+    console.log("添加player-attack事件监听器");
+    // 强制清理所有旧的监听器，确保每次只添加一个
+    this.events.removeAllListeners('player-attack');
     this.events.on('player-attack', (hitbox: any, damage: number, dir: any, comboCount: number, hasFly: boolean) => {
+        console.log(`player-attack事件触发，伤害: ${damage}`);
         
         const hitEnemy = (enemy: any) => {
+            console.log(`命中敌人: ${enemy.id}, 伤害: ${damage}`);
             enemy.takeDamage(damage, dir, comboCount);
             
             // 【苍蝇特技】：如果是第三段攻击命中，且有苍蝇，挂流血！
@@ -487,6 +504,102 @@ export default class GameScene extends Phaser.Scene {
             this.physics.overlap(hitbox, this.myBoss, (_box, b) => hitEnemy(b));
         }
     });
+  }
+
+  // 场景关闭时清理资源，避免重复添加
+  shutdown() {
+    console.log("GameScene关闭，开始清理资源");
+    
+    // 清理事件监听器
+    console.log("清理事件监听器");
+    this.game.events.off('heal-player');
+    this.events.off('boss-aoe');
+    this.events.off('boss-summon');
+    this.events.off('player-attack');
+    
+    // 强制清理所有事件监听器
+    this.events.removeAllListeners('boss-aoe');
+    this.events.removeAllListeners('boss-summon');
+    this.events.removeAllListeners('player-attack');
+    
+    // 清理游戏事件
+    this.game.events.removeAllListeners('heal-player');
+    console.log("事件监听器清理完成");
+    
+    // 清理Boss实例
+    if (this.myBoss) {
+      console.log("销毁Boss实例");
+      this.myBoss.destroy();
+      this.myBoss = null!;
+    }
+    
+    // 清理所有可能的物理体
+    console.log("清理所有物理体");
+    
+    // 清理敌人组
+    if (this.enemies) {
+      console.log("清理敌人组，当前数量:", this.enemies.getChildren().length);
+      this.enemies.clear(true, true);
+      this.enemies = null!;
+    }
+    
+    // 清理Boss组
+    if (this.bossesGroup) {
+      console.log("清理Boss组，当前数量:", this.bossesGroup.getChildren().length);
+      this.bossesGroup.clear(true, true);
+      this.bossesGroup = null!;
+    }
+    
+    // 清理物理碰撞器
+    if (this.walls1Collider) {
+      this.walls1Collider.destroy();
+      this.walls1Collider = null!;
+    }
+    if (this.walls2Collider) {
+      this.walls2Collider.destroy();
+      this.walls2Collider = null!;
+    }
+    if (this.blockCollider) {
+      this.blockCollider.destroy();
+      this.blockCollider = null!;
+    }
+    if (this.enemyPlayerOverlap) {
+      this.enemyPlayerOverlap.destroy();
+      this.enemyPlayerOverlap = null!;
+    }
+    if (this.enemyWallsCollider) {
+      this.enemyWallsCollider.destroy();
+      this.enemyWallsCollider = null!;
+    }
+    if (this.bossWallsCollider) {
+      this.bossWallsCollider.destroy();
+      this.bossWallsCollider = null!;
+    }
+    if (this.bossPlayerOverlap) {
+      this.bossPlayerOverlap.destroy();
+      this.bossPlayerOverlap = null!;
+    }
+    
+    // 清理所有可能的物理组
+    if (this.enemies) {
+      this.enemies.clear(true, true);
+      this.enemies = null!;
+    }
+    if (this.bossesGroup) {
+      this.bossesGroup.clear(true, true);
+      this.bossesGroup = null!;
+    }
+    
+    // 清理玩家
+    if (this.player) {
+      this.player.destroy();
+      this.player = null!;
+    }
+    
+    // 清理所有物理体
+    this.physics.world.bodies.clear();
+    
+    console.log("GameScene资源清理完成");
   }
 
   update() {
