@@ -179,34 +179,37 @@ export default class Boss extends Enemy {
         }
 
         // --- 以下是 CHASE (追击) 状态的逻辑 ---
-        const dist = Phaser.Math.Distance.Between(this.x, this.y, this.targetPlayer.x, this.targetPlayer.y);
-        
-        // 只有在仇恨范围内才移动和攻击
-        if (dist <= this.aggroRange) {
-            // 减少技能冷却时间
-            if (this.skillCooldown > 0) {
-                this.skillCooldown -= 16; // 假设60fps，每帧减少16毫秒
-            }
-
-            // 靠近玩家且技能冷却完毕，随机释放技能
-            if (dist < 120 && this.skillCooldown <= 0) {
-                this.startRandomSkill();
-                return;
-            }
-
-            // 寻路与镜像反转
-            const dir = new Phaser.Math.Vector2(this.targetPlayer.x - this.x, this.targetPlayer.y - this.y).normalize();
-            this.setVelocity(dir.x * this.speed, dir.y * this.speed);
+        // SKILL_3状态下不执行CHASE逻辑，避免中断冲刺动画
+        if (this.currentState === BossState.CHASE) {
+            const dist = Phaser.Math.Distance.Between(this.x, this.y, this.targetPlayer.x, this.targetPlayer.y);
             
-            // 向左移动用原图，向右移动开启镜像 FlipX
-            if (dir.x > 0) this.setFlipX(true);
-            else if (dir.x < 0) this.setFlipX(false);
-            
-            this.anims.play('boss-move', true);
-        } else {
-            // 超出仇恨范围，停止移动
-            this.setVelocity(0, 0);
-            this.anims.stop();
+            // 只有在仇恨范围内才移动和攻击
+            if (dist <= this.aggroRange) {
+                // 减少技能冷却时间
+                if (this.skillCooldown > 0) {
+                    this.skillCooldown -= 16; // 假设60fps，每帧减少16毫秒
+                }
+
+                // 靠近玩家且技能冷却完毕，随机释放技能
+                if (dist < 120 && this.skillCooldown <= 0) {
+                    this.startRandomSkill();
+                    return;
+                }
+
+                // 寻路与镜像反转
+                const dir = new Phaser.Math.Vector2(this.targetPlayer.x - this.x, this.targetPlayer.y - this.y).normalize();
+                this.setVelocity(dir.x * this.speed, dir.y * this.speed);
+                
+                // 向左移动用原图，向右移动开启镜像 FlipX
+                if (dir.x > 0) this.setFlipX(true);
+                else if (dir.x < 0) this.setFlipX(false);
+                
+                this.anims.play('boss-move', true);
+            } else {
+                // 超出仇恨范围，停止移动
+                this.setVelocity(0, 0);
+                this.anims.stop();
+            }
         }
     }
 
