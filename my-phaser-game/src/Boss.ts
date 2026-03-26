@@ -377,16 +377,12 @@ export default class Boss extends Enemy {
     }
 
     protected die() {
+        // 首先调用父类die方法，设置isDead = true
+        super.die();
+        
         this.currentState = BossState.DEAD;
-        this.setVelocity(0, 0);
         this.setTint(0x333333);
         console.log("【Boss 被击杀！】");
-        
-        // 清理流血计时器，防止游戏卡死
-        if (this.bleedTimer) {
-            this.bleedTimer.remove();
-            this.bleedTimer = null;
-        }
         
         // 重置流血状态，防止复活后自带流血
         (this as any).bleedStacks = 0;
