@@ -396,6 +396,9 @@ export default class Boss extends Enemy {
         (this as any).bleedStacks = 0;
         (this as any).bleedDurations = [];
         
+        // 立即更新UI，确保流血图标消失
+        this.scene.game.events.emit('update-boss-bleed', 0);
+        
         // 更新全局状态中的死亡记录
         if (this.monsterId) {
             const globalState = (this.scene.game as any).globalState || {};

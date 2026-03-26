@@ -192,10 +192,8 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         // 检查是否已经达到最大层数
         if (this.bleedStacks >= this.MAX_BLEED_STACKS) {
             console.log(`怪物流血已达最大层数: ${this.MAX_BLEED_STACKS}`);
-            // 重置所有层的持续时间为15秒
-            for (let i = 0; i < this.bleedDurations.length; i++) {
-                this.bleedDurations[i] = 15000;
-            }
+            // 重置最早的一层持续时间为15秒（保持每层独立）
+            this.bleedDurations[0] = 15000;
             return;
         }
         
