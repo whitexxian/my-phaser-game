@@ -126,10 +126,10 @@ export default class UIScene extends Phaser.Scene {
     this.bossCurrentHealth = data.health;
     this.bossMaxHealth = data.maxHealth;
     
-    const width = 400; // 更长
-    const height = 20; // 更宽
+    const width = 600; // 更长，类似艾尔登法环
+    const height = 12; // 更细
     const x = this.cameras.main.width / 2 - width / 2;
-    const y = this.cameras.main.height - 60;
+    const y = this.cameras.main.height - 50;
     
     // 清空之前的绘制
     this.bossHealthBar.clear();
@@ -144,28 +144,30 @@ export default class UIScene extends Phaser.Scene {
     this.bossHealthBar.fillRect(x, y, width * healthPercent, height);
     
     // 绘制边框
-    this.bossHealthBar.lineStyle(2, 0xffffff, 1);
+    this.bossHealthBar.lineStyle(1, 0xffffff, 1);
     this.bossHealthBar.strokeRect(x, y, width, height);
     
-    // 绘制名字 "教宗巴德万"
-    const nameText = this.add.text(x + width / 2, y - 20, '教宗巴德万', {
-      fontSize: '20px',
+    // 绘制名字 "教宗巴德万" - 加粗，与血条左端对齐，在血条上方
+    const nameText = this.add.text(x, y - 25, '教宗巴德万', {
+      fontSize: '24px',
       fontFamily: 'Arial',
       color: '#ffffff',
-      align: 'center'
+      align: 'left',
+      stroke: '#000000',
+      strokeThickness: 2
     });
-    nameText.setOrigin(0.5);
+    nameText.setOrigin(0, 0);
     nameText.setScrollFactor(0);
     nameText.setDepth(1001);
     
-    // 绘制累计伤害文本
-    const damageText = this.add.text(x + width / 2, y - 40, `累计伤害: ${data.totalDamageTaken?.toFixed(1) || 0}`, {
-      fontSize: '14px',
+    // 绘制累计伤害文本 - 与血条右端对齐，在血条下方
+    const damageText = this.add.text(x + width, y + 15, `累计伤害: ${data.totalDamageTaken?.toFixed(1) || 0}`, {
+      fontSize: '16px',
       fontFamily: 'Arial',
       color: '#ffff00',
-      align: 'center'
+      align: 'right'
     });
-    damageText.setOrigin(0.5);
+    damageText.setOrigin(1, 0);
     damageText.setScrollFactor(0);
     damageText.setDepth(1001);
     
@@ -196,14 +198,15 @@ export default class UIScene extends Phaser.Scene {
       return;
     }
     
-    const x = this.cameras.main.width / 2;
-    const y = this.cameras.main.height - 110; // 在血条上方
+    const width = 600; // 与血条宽度一致
+    const x = this.cameras.main.width / 2 + width / 2; // 血条右端
+    const y = this.cameras.main.height - 80; // 在血条上方
     
     // 创建流血层数图标（只显示一个，根据层数设置对应的帧）
     const icon = this.add.image(x, y, 'bleed-icons');
     icon.setFrame(stacks - 1); // 1层流血显示帧0，2层显示帧1，3层显示帧2
     icon.setScale(1.5);
-    icon.setOrigin(0.5);
+    icon.setOrigin(1, 0.5); // 与血条右端对齐
     icon.setScrollFactor(0);
     icon.setDepth(1001);
     this.bossBleedIcons.push(icon);
