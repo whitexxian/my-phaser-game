@@ -196,19 +196,17 @@ export default class UIScene extends Phaser.Scene {
       return;
     }
     
-    const width = 400;
-    const x = this.cameras.main.width / 2 - width / 2;
+    const x = this.cameras.main.width / 2;
     const y = this.cameras.main.height - 110; // 在血条上方
     
-    // 创建流血层数图标
-    for (let i = 0; i < stacks; i++) {
-      const icon = this.add.image(x + 20 + i * 40, y, 'bleed-icons');
-      icon.setFrame(i); // 使用对应的帧（0, 1, 2）
-      icon.setScale(1.5);
-      icon.setScrollFactor(0);
-      icon.setDepth(1001);
-      this.bossBleedIcons.push(icon);
-    }
+    // 创建流血层数图标（只显示一个，根据层数设置对应的帧）
+    const icon = this.add.image(x, y, 'bleed-icons');
+    icon.setFrame(stacks - 1); // 1层流血显示帧0，2层显示帧1，3层显示帧2
+    icon.setScale(1.5);
+    icon.setOrigin(0.5);
+    icon.setScrollFactor(0);
+    icon.setDepth(1001);
+    this.bossBleedIcons.push(icon);
   }
   
   private showBossHealthBar() {
