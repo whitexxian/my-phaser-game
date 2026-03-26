@@ -171,9 +171,9 @@ export default class Boss extends Enemy {
             this.shadow.setDepth(-1); // 确保影子在最底层
         }
         
-        // 如果处于前摇或虚弱状态，原地不动
-        // 注意：技能三（冲刺）时不重置速度，允许Boss移动
-        if (this.currentState === BossState.WINDUP || this.currentState === BossState.STAGGERED) {
+        // 只有技能三（冲刺）可以移动，其他状态都原地不动
+        // 技能三使用SKILL_2状态，但通过currentSkill === 3来区分
+        if (this.currentState !== BossState.CHASE && !(this.currentState === BossState.SKILL_2 && this.currentSkill === 3)) {
             this.setVelocity(0, 0);
             return;
         }
