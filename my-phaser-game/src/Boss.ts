@@ -394,7 +394,7 @@ export default class Boss extends Enemy {
         
         // 重置流血状态，防止复活后自带流血
         (this as any).bleedStacks = 0;
-        (this as any).bleedDurations = [];
+        (this as any).bleedStartTimes = [];
         
         // 立即更新UI，确保流血图标消失
         this.scene.game.events.emit('update-boss-bleed', 0);

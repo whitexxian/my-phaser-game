@@ -24,7 +24,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     private bleedStacks: number = 0; // 流血层数
     protected bleedTimer: Phaser.Time.TimerEvent | null = null;
     private readonly MAX_BLEED_STACKS: number = 3; // 最大流血层数
-    private bleedDurations: number[] = []; // 每层流血的剩余持续时间（毫秒）
+    private bleedStartTimes: number[] = []; // 每层流血的开始时间戳（毫秒）
 
     constructor(scene: Phaser.Scene, x: number, y: number, texture: string, frame?: number) {
         super(scene, x, y, texture, frame);
@@ -56,7 +56,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
 
         // 初始化流血状态
         this.bleedStacks = 0;
-        this.bleedDurations = [];
+        this.bleedStartTimes = [];
 
         // 创建敌人动画
         this.createAnimations();
@@ -196,15 +196,15 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         // 检查是否已经达到最大层数
         if (this.bleedStacks >= this.MAX_BLEED_STACKS) {
             console.log(`怪物流血已达最大层数: ${this.MAX_BLEED_STACKS}`);
-            // 重置最早的一层持续时间为15秒（保持每层独立）
-            this.bleedDurations[0] = 15000;
+            // 重置最早的一层开始时间为当前时间
+            this.bleedStartTimes[0] = scene.time.now;
             return;
         }
         
         // 增加流血层数
         this.bleedStacks++;
-        // 添加新层的持续时间（15秒）
-        this.bleedDurations.push(15000);
+        // 添加新层的开始时间戳
+        this.bleedStartTimes.push(scene.time.now);
         console.log(`怪物流血层数: ${this.bleedStacks}`);
         
         // 发送全局事件更新UI
@@ -221,16 +221,21 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         }
     }
     
+    // 发送当前流血状态到UI
+    public updateBleedUI() {
+        this.scene.game.events.emit('update-boss-bleed', this.bleedStacks);
+    }
+    
     // 【新增：流血每Tick的伤害计算】
     private onBleedTick() {
-        if (this.isDead || this.bleedStacks <= 0 || this.bleedDurations.length === 0) {
+        if (this.isDead || this.bleedStacks <= 0 || this.bleedStartTimes.length === 0) {
             if (this.bleedTimer) {
                 this.bleedTimer.remove();
                 this.bleedTimer = null;
             }
             const oldStacks = this.bleedStacks;
             this.bleedStacks = 0;
-            this.bleedDurations = [];
+            this.bleedStartTimes = [];
             
             // 发送全局事件更新UI（层数变为0）
             if (oldStacks > 0) {
@@ -245,19 +250,21 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         
         console.log(`怪物流血触发！层数: ${this.bleedStacks}, 伤害: ${bleedDamage}`);
         
-        // 减少每层的持续时间并检查哪些层已经结束
-        const newDurations: number[] = [];
-        for (let i = 0; i < this.bleedDurations.length; i++) {
-            const newDuration = this.bleedDurations[i] - 5000;
-            if (newDuration > 0) {
-                newDurations.push(newDuration);
+        // 检查每层的持续时间，移除超过15秒的层
+        const currentTime = this.scene.time.now;
+        const newStartTimes: number[] = [];
+        
+        for (let i = 0; i < this.bleedStartTimes.length; i++) {
+            const elapsed = currentTime - this.bleedStartTimes[i];
+            if (elapsed < 15000) { // 15秒内保留
+                newStartTimes.push(this.bleedStartTimes[i]);
             }
         }
         
-        // 更新持续时间数组和层数
+        // 更新开始时间数组和层数
         const oldStacks = this.bleedStacks;
-        this.bleedDurations = newDurations;
-        this.bleedStacks = newDurations.length;
+        this.bleedStartTimes = newStartTimes;
+        this.bleedStacks = newStartTimes.length;
         
         // 如果层数发生变化，发送UI更新事件
         if (this.bleedStacks !== oldStacks) {
