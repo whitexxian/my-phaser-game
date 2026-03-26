@@ -297,6 +297,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         // 死亡判定
         if (this.health <= 0) {
             this.die();
+            return;
         }
     }
 

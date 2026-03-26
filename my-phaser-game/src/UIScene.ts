@@ -225,9 +225,7 @@ export default class UIScene extends Phaser.Scene {
       this.bossDamageText.destroy();
     }
     // 清理流血图标并重置流血状态
-    this.bossBleedIcons.forEach(icon => icon.destroy());
-    this.bossBleedIcons = [];
-    this.bossCurrentBleedStacks = 0;
+    this.updateBossBleedUI(0);
   }
   
   // 显示提示消息
