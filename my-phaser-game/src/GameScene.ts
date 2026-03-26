@@ -31,6 +31,7 @@ export default class GameScene extends Phaser.Scene {
   private doorSolid!: Phaser.GameObjects.Zone; // 门的物理阻挡体
   private activeInteractZone: string = ""; // 当前踩在哪个交互区
   private interactKey!: Phaser.Input.Keyboard.Key; // 交互按键 (F键)
+  private kKey!: Phaser.Input.Keyboard.Key; // 处决按键 (K键)
   private interactZones!: Phaser.Physics.Arcade.StaticGroup; // 交互区域组
   
   // 【新增：苍蝇宠物】
@@ -455,11 +456,10 @@ export default class GameScene extends Phaser.Scene {
         });
         
         // ==========================================
-        // 【史诗机制：鼠标右键处决！】
+        // 【史诗机制：鼠标右键/K键处决！】
         // ==========================================
-        this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-            // 判断是否是点击了鼠标右键
-            if (pointer.rightButtonDown() && this.myBoss && this.myBoss.active) {
+        const executeBoss = () => {
+            if (this.myBoss && this.myBoss.active) {
                 const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.myBoss.x, this.myBoss.y);
                 
                 // 处决条件：必须靠得很近 (80像素内) + Boss必须在虚弱状态
@@ -467,7 +467,18 @@ export default class GameScene extends Phaser.Scene {
                     this.myBoss.execute(); // 执行处决！
                 }
             }
+        };
+        
+        // 右键处决
+        this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            // 判断是否是点击了鼠标右键
+            if (pointer.rightButtonDown()) {
+                executeBoss();
+            }
         });
+        
+        // K键处决（在键盘初始化后设置）
+        // 注意：这里暂时不设置，在create方法的键盘初始化部分统一设置
     }
 
     // 5. 批量渲染 Above 层 (不需要碰撞，但必须遮挡玩家)
@@ -619,6 +630,25 @@ export default class GameScene extends Phaser.Scene {
     // 初始化键盘输入
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = this.input.keyboard!.addKeys("W,A,S,D") as any;
+    
+    // 初始化K键（处决键）
+    this.kKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.K);
+    
+    // 设置K键处决事件（只有在有Boss的时候才生效）
+    const executeBoss = () => {
+        if (this.myBoss && this.myBoss.active) {
+            const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.myBoss.x, this.myBoss.y);
+            
+            // 处决条件：必须靠得很近 (80像素内) + Boss必须在虚弱状态
+            if (dist < 80 && this.myBoss.isStaggered()) {
+                this.myBoss.execute(); // 执行处决！
+            }
+        }
+    };
+    
+    this.kKey.on('down', () => {
+        executeBoss();
+    });
 
     // ==========================================
     // 【测试机制】：按一下键盘的 H 键，模拟掉半格血

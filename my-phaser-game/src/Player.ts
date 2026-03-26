@@ -57,6 +57,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   // 交互按键 (空格键用于翻滚和交互)
   private spaceKey!: Phaser.Input.Keyboard.Key;
   
+  // 攻击按键 (J键)
+  private jKey!: Phaser.Input.Keyboard.Key;
+  
   // 【核心新增：连击系统变量】
   private comboCount: number = 0; // 当前打到了第几段 (0, 1, 2, 3)
   private comboTimer: Phaser.Time.TimerEvent | null = null; // 连击判定窗口倒计时
@@ -118,6 +121,9 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     
     // 初始化空格键
     this.spaceKey = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    
+    // 初始化J键（攻击键）
+    this.jKey = scene.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.J);
 
     // 初始化鼠标左键监听
     scene.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
@@ -385,7 +391,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             
             // 2. 【新增：攻击判定】
             // 只有在正常状态下，才能起手攻击！
-            if (this.mouseLeftDown) {
+            if (this.mouseLeftDown || Phaser.Input.Keyboard.JustDown(this.jKey)) {
                 this.performAttack();
                 this.mouseLeftDown = false; // 防止连续触发
             }
@@ -408,10 +414,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             }
             
             // 【连招输入缓存机制 (Input Buffering)】
-            // 即使玩家还在上一拳的硬直动画里，只要他提前按下了鼠标左键，
+            // 即使玩家还在上一拳的硬直动画里，只要他提前按下了鼠标左键或J键，
             // 我们就允许他"预输入"下一拳，动画结束后自动接上！
             // 这在动作游戏里极大地提升了手感。
-            if (this.mouseLeftDown && this.comboCount < 3) {
+            if ((this.mouseLeftDown || Phaser.Input.Keyboard.JustDown(this.jKey)) && this.comboCount < 3) {
                 // 把按键缓存起来，等当前动画播完立刻执行下一段
                 this.scene.time.delayedCall(50, () => {
                     // 这是一个简化的缓冲，真实项目会更复杂。我们先用最直接的方式：
