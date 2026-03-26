@@ -290,7 +290,7 @@ export default class Boss extends Enemy {
             const dir = new Phaser.Math.Vector2(this.targetPlayer.x - this.x, this.targetPlayer.y - this.y).normalize();
             
             // 设置冲刺速度
-            this.setVelocity(dir.x * 300, dir.y * 300);
+            this.setVelocity(dir.x * 600, dir.y * 600);
             
             // 根据方向设置镜像
             if (dir.x > 0) this.setFlipX(true);
