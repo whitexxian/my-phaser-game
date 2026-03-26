@@ -53,7 +53,7 @@ export default class Boss extends Enemy {
         );
         this.shadow.setDepth(-1); // 确保影子在最底层
         
-        // 【创建所有动作序列 (14张图)】
+        // 【创建所有动作序列 (18张图)】
         // 只在第一次创建时创建动画
         if (!scene.anims.exists('boss-move')) {
             // 0-2: 向左移动帧（第1-3张）
@@ -64,6 +64,8 @@ export default class Boss extends Enemy {
             scene.anims.create({ key: 'boss-skill1', frames: scene.anims.generateFrameNumbers(texture, { start: 6, end: 9 }), frameRate: 12, repeat: -1 });
             // 10-13: 技能二的动作（第11-14张）
             scene.anims.create({ key: 'boss-skill2', frames: scene.anims.generateFrameNumbers(texture, { start: 10, end: 13 }), frameRate: 8, repeat: -1 });
+            // 14-17: 技能三的动作（第15-18张）
+            scene.anims.create({ key: 'boss-skill3', frames: scene.anims.generateFrameNumbers(texture, { start: 14, end: 17 }), frameRate: 12, repeat: -1 });
         }
 
         this.anims.play('boss-move', true);
@@ -211,18 +213,37 @@ export default class Boss extends Enemy {
         this.currentState = BossState.WINDUP;
         this.anims.play('boss-windup', true);
         
-        // 技能选择概率：技能一80%，技能二20%
+        // 根据血量调整技能概率
+        const isHalfHealth = this.health > this.maxHealth / 2;
         const random = Phaser.Math.FloatBetween(0, 1);
-        this.currentSkill = random < 0.8 ? 1 : 2;
+        
+        if (isHalfHealth) {
+            // 半血以上：技能一35%，技能二25%，技能三40%
+            if (random < 0.35) {
+                this.currentSkill = 1;
+            } else if (random < 0.6) {
+                this.currentSkill = 2;
+            } else {
+                this.currentSkill = 3;
+            }
+        } else {
+            // 半血以下：技能一0%，技能二25%，技能三75%
+            if (random < 0.25) {
+                this.currentSkill = 2;
+            } else {
+                this.currentSkill = 3;
+            }
+        }
         
         this.poiseDamageTaken = 0; // 重置削韧值
 
+        // 所有技能前摇都是0.2秒
         if (this.currentSkill === 1) {
-            // 技能 1：前摇 1秒 -> 旋转 0.5秒
-            this.skillTimer = this.scene.time.delayedCall(1000, () => this.executeSkill1());
+            this.skillTimer = this.scene.time.delayedCall(200, () => this.executeSkill1());
+        } else if (this.currentSkill === 2) {
+            this.skillTimer = this.scene.time.delayedCall(200, () => this.executeSkill2());
         } else {
-            // 技能 2：前摇 3秒 -> 召唤 1秒
-            this.skillTimer = this.scene.time.delayedCall(3000, () => this.executeSkill2());
+            this.skillTimer = this.scene.time.delayedCall(200, () => this.executeSkill3());
         }
     }
 
@@ -258,8 +279,70 @@ export default class Boss extends Enemy {
         });
     }
 
-    private endAction() {
+    private executeSkill3() {
+        if (this.currentState !== BossState.WINDUP) return;
+        
+        this.currentState = BossState.SKILL_2; // 使用SKILL_2状态，因为没有SKILL_3状态
+        this.anims.play('boss-skill3', true);
+
+        // 计算向玩家方向的冲刺方向
+        if (this.targetPlayer) {
+            const dir = new Phaser.Math.Vector2(this.targetPlayer.x - this.x, this.targetPlayer.y - this.y).normalize();
+            
+            // 设置冲刺速度
+            this.setVelocity(dir.x * 300, dir.y * 300);
+            
+            // 根据方向设置镜像
+            if (dir.x > 0) this.setFlipX(true);
+            else if (dir.x < 0) this.setFlipX(false);
+        }
+
+        // 冲刺持续0.5秒
+        this.scene.time.delayedCall(500, () => {
+            this.setVelocity(0, 0);
+            this.endAction(true); // 传入true表示是技能三结束
+        });
+    }
+
+    private endAction(isSkill3End: boolean = false) {
         if (this.currentState === BossState.DEAD) return;
+        
+        // 如果是技能三结束，检查是否需要触发额外的技能一
+        if (isSkill3End) {
+            const isHalfHealth = this.health > this.maxHealth / 2;
+            let shouldTriggerSkill1 = false;
+            
+            if (isHalfHealth) {
+                // 半血以上：25%概率触发技能一
+                shouldTriggerSkill1 = Phaser.Math.FloatBetween(0, 1) < 0.25;
+            } else {
+                // 半血以下：100%概率触发技能一
+                shouldTriggerSkill1 = true;
+            }
+            
+            if (shouldTriggerSkill1) {
+                // 立即释放技能一（无前摇）
+                this.currentState = BossState.SKILL_1;
+                this.anims.play('boss-skill1', true);
+                
+                // 技能1效果：范围震动伤害
+                this.scene.cameras.main.shake(500, 0.001);
+                const aoe = this.scene.add.circle(this.x, this.y, 60);
+                this.scene.physics.add.existing(aoe);
+                this.scene.events.emit('boss-aoe', aoe, 1.0);
+                
+                this.scene.time.delayedCall(500, () => {
+                    aoe.destroy();
+                    // 从额外释放的技能一开始计算冷却
+                    this.currentState = BossState.CHASE;
+                    this.clearTint();
+                    this.skillCooldown = 10000;
+                });
+                return;
+            }
+        }
+        
+        // 正常结束动作
         this.currentState = BossState.CHASE;
         this.clearTint();
         this.skillCooldown = 10000; // 所有动作结束后，进入 10 秒的技能发呆期
