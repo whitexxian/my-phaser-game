@@ -66,7 +66,7 @@ export default class Boss extends Enemy {
             // 10-13: 技能二的动作（第11-14张）
             scene.anims.create({ key: 'boss-skill2', frames: scene.anims.generateFrameNumbers(texture, { start: 10, end: 13 }), frameRate: 8, repeat: -1 });
             // 14-17: 技能三的动作（第15-18张）
-            scene.anims.create({ key: 'boss-skill3', frames: scene.anims.generateFrameNumbers(texture, { start: 14, end: 17 }), frameRate: 12, repeat: -1 });
+            scene.anims.create({ key: 'boss-skill3', frames: scene.anims.generateFrameNumbers(texture, { start: 14, end: 17 }), frameRate: 12, repeat: 0 });
         }
 
         this.anims.play('boss-move', true);
