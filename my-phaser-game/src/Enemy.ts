@@ -220,7 +220,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     
     // 【新增：流血每Tick的伤害计算】
     private onBleedTick() {
-        if (this.isDead || this.bleedStacks <= 0 || this.bleedDuration <= 0) {
+        if (this.isDead || this.bleedStacks <= 0) {
             if (this.bleedTimer) {
                 this.bleedTimer.remove();
                 this.bleedTimer = null;
@@ -244,6 +244,27 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         this.health -= bleedDamage;
         
         console.log(`怪物流血触发！层数: ${this.bleedStacks}, 伤害: ${bleedDamage}, 剩余时间: ${this.bleedDuration / 1000}秒`);
+        
+        // 如果持续时间结束，减少一层并重置持续时间
+        if (this.bleedDuration <= 0) {
+            this.bleedStacks--;
+            this.bleedDuration = 15000; // 重置为15秒
+            
+            // 发送全局事件更新UI
+            this.scene.game.events.emit('update-boss-bleed', this.bleedStacks);
+            
+            console.log(`怪物流血层数减少！当前层数: ${this.bleedStacks}`);
+            
+            // 如果层数为0，清理计时器
+            if (this.bleedStacks <= 0) {
+                if (this.bleedTimer) {
+                    this.bleedTimer.remove();
+                    this.bleedTimer = null;
+                }
+                this.bleedDuration = 0;
+                return;
+            }
+        }
         
         // 更新血条
         this.updateHealthBar();

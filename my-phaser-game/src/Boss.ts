@@ -392,6 +392,10 @@ export default class Boss extends Enemy {
             this.bleedTimer = null;
         }
         
+        // 重置流血状态，防止复活后自带流血
+        (this as any).bleedStacks = 0;
+        (this as any).bleedDuration = 0;
+        
         // 更新全局状态中的死亡记录
         if (this.monsterId) {
             const globalState = (this.scene.game as any).globalState || {};
