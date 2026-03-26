@@ -274,6 +274,22 @@ export default class Boss extends Enemy {
         this.hideHealthBar();
         // 设置为非活跃状态，防止update方法再次显示血条
         this.setActive(false);
+        
+        // 清理流血计时器，防止游戏卡死
+        if (this.bleedTimer) {
+            this.bleedTimer.remove();
+            this.bleedTimer = null;
+        }
+        
+        // 更新全局状态中的死亡记录
+        if (this.monsterId) {
+            const globalState = (this.scene.game as any).globalState || {};
+            globalState.deadMonsters = globalState.deadMonsters || {};
+            globalState.deadMonsters[this.monsterId] = true;
+            (this.scene.game as any).globalState = globalState;
+            console.log(`怪物 ${this.monsterId} 已标记为死亡`);
+        }
+        
         this.scene.time.delayedCall(1000, () => {
             // 销毁影子
             if (this.shadow) {

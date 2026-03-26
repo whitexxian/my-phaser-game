@@ -11,6 +11,7 @@ export default class GameScene extends Phaser.Scene {
   private blockLayer!: Phaser.Tilemaps.TilemapLayer;
   private above2Layer!: Phaser.Tilemaps.TilemapLayer;
   private above3Layer!: Phaser.Tilemaps.TilemapLayer;
+
   private walls1Collider!: Phaser.Physics.Arcade.Collider;
   private walls2Collider!: Phaser.Physics.Arcade.Collider;
   private blockCollider!: Phaser.Physics.Arcade.Collider;
@@ -30,9 +31,18 @@ export default class GameScene extends Phaser.Scene {
   private doorSolid!: Phaser.GameObjects.Zone; // 门的物理阻挡体
   private activeInteractZone: string = ""; // 当前踩在哪个交互区
   private interactKey!: Phaser.Input.Keyboard.Key; // 交互按键 (F键)
+  private interactZones!: Phaser.Physics.Arcade.StaticGroup; // 交互区域组
   
   // 【新增：苍蝇宠物】
   private flyPet: Phaser.GameObjects.Sprite | null = null;
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private wasd!: {
+    W: Phaser.Input.Keyboard.Key;
+    A: Phaser.Input.Keyboard.Key;
+    S: Phaser.Input.Keyboard.Key;
+    D: Phaser.Input.Keyboard.Key;
+  };
+  private isFlyFlipped: boolean = false;
   // 记录已经开过的宝箱
   private openedChests: Set<string> = new Set();
 
@@ -95,6 +105,12 @@ export default class GameScene extends Phaser.Scene {
     this.load.image("terrian-image", "assets/maps/terrian.png"); // 加载瓦片图
     this.load.tilemapTiledJSON("map", "assets/maps/level1.json"); // 加载你画的地图
     this.load.tilemapTiledJSON("house-map", "assets/maps/house.json");
+    
+    // 加载苍蝇飞行动作帧
+    this.load.spritesheet("fly", "assets/fly.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
   }
 
   create() {
@@ -109,7 +125,7 @@ export default class GameScene extends Phaser.Scene {
     }
 
     // 检查全局状态，看看门是否已经被打开
-    if ((this.game as any).globalState && (this.game as any).globalState.doorOpen) {
+    if ((this.game as any).globalState && (this.game as any).globalState.gameSceneDoorOpen) {
       this.isDoorOpen = true;
       console.log("门已经被打开，保持打开状态");
     }
@@ -216,9 +232,57 @@ export default class GameScene extends Phaser.Scene {
     
     // 获取hasGauntlet状态（如果有传递）
     const hasGauntlet = this.scene.settings.data && (this.scene.settings.data as any).hasGauntlet || false;
+    const hasFly = this.scene.settings.data && (this.scene.settings.data as any).hasFly || false;
+    
+    // 获取玩家血量和最大血量（如果有传递）
+    const playerHealth = this.scene.settings.data && (this.scene.settings.data as any).playerHealth || 3;
+    const playerMaxHealth = this.scene.settings.data && (this.scene.settings.data as any).playerMaxHealth || 3;
+    
+    // 获取是否需要刷新怪物（默认不刷新，只有从bed休息或死亡传送时才刷新）
+    const shouldRespawnMonsters = this.scene.settings.data && (this.scene.settings.data as any).shouldRespawnMonsters || false;
     
     // 创建玩家
-    this.player = new Player(this, playerX, playerY, "player", hasGauntlet);
+    this.player = new Player(this, playerX, playerY, "player", hasGauntlet, playerHealth, playerMaxHealth, hasFly);
+    
+    // 发送全局事件更新UI血量和最大血量显示
+    this.game.events.emit("update-health", this.player.health);
+    this.game.events.emit("update-max-health", this.player.maxHealth, this.player.health);
+    
+    // 创建苍蝇（如果玩家已经有苍蝇）
+    if (this.player.hasFly) {
+        this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);
+        // 苍蝇动画（2x4网格，8帧）
+        this.anims.create({
+            key: 'fly-flap',
+            frames: this.anims.generateFrameNumbers('fly', { start: 0, end: 7 }),
+            frameRate: 10,
+            repeat: -1
+        });
+        this.flyPet.anims.play('fly-flap', true);
+        // 设置图层深度高于玩家
+        this.flyPet.setDepth(10);
+    }
+    
+    // 创建黑屏覆盖层（初始完全不透明）
+    const blackScreen = this.add.rectangle(
+        this.cameras.main.width / 2,
+        this.cameras.main.height / 2,
+        this.cameras.main.width,
+        this.cameras.main.height,
+        0x000000,
+        1
+    );
+    blackScreen.setDepth(10000);
+    
+    // 黑屏淡出
+    this.tweens.add({
+        targets: blackScreen,
+        alpha: 0,
+        duration: 500,
+        onComplete: () => {
+            blackScreen.destroy();
+        }
+    });
     
     // ==========================================
     // 【新增 1：全局吸血监听】
@@ -238,72 +302,173 @@ export default class GameScene extends Phaser.Scene {
     
     // 创建敌人组
     this.enemies = this.physics.add.group({ runChildUpdate: true });
+    // 提前创建boss组，避免后续访问时出现问题
+    this.bossesGroup = this.physics.add.group({ runChildUpdate: true });
     
-    // 创建一个敌人（在玩家出生点附近）
-    const slime = new Enemy(this, playerX + 50, playerY + 50, "enemy0");
-    slime.setTarget(this.player);
-    this.enemies.add(slime);
+    // 【篝火系统】：怪物刷新逻辑（基于编号的存活区/死亡区机制）
+    // 1. 给每个怪物分配唯一标识：场景名_怪物类型_编号
+    // 2. 存活区：未死亡的怪物，每次进出场景刷新
+    // 3. 死亡区：已死亡的怪物，每次进出场景不刷新
+    // 4. 坐火/死亡复活：刷新所有怪物
+    const hasSpawnPoint = this.scene.settings.data && (this.scene.settings.data as any).spawnPoint;
     
-    // 为敌人设置与地面的碰撞
-    this.enemyWallsCollider = this.physics.add.collider(this.enemies, [this.walls1Layer, this.walls2Layer]);
+    // 获取全局状态中的怪物死亡记录
+    const globalState = (this.game as any).globalState || {};
+    globalState.deadMonsters = globalState.deadMonsters || {};
+    
+    // 定义怪物配置（带有唯一标识）
+    const monsterConfigs = [
+        { id: "GameScene_enemy0_0", type: "enemy0", x: playerX + 50, y: playerY + 50 },
+        { id: "GameScene_boss_0", type: "boss", x: playerX + 200, y: playerY + 200 }
+    ];
+    
+    // 创建怪物（根据存活区/死亡区逻辑）
+    monsterConfigs.forEach(config => {
+        const isDead = globalState.deadMonsters[config.id] || false;
+        
+        // 坐火/死亡复活时强制刷新所有怪物
+        if (shouldRespawnMonsters) {
+            console.log(`强制刷新怪物: ${config.id}`);
+            if (config.type === "boss") {
+                // 创建Boss
+                this.myBoss = new Boss(this, config.x, config.y, "enemy1");
+                this.myBoss.setTarget(this.player);
+                this.myBoss.monsterId = config.id; // 设置唯一标识
+                this.bossesGroup = this.physics.add.group({ runChildUpdate: true });
+                this.bossesGroup.add(this.myBoss);
+                this.bossWallsCollider = this.physics.add.collider(this.bossesGroup, [this.walls1Layer, this.walls2Layer]);
+            } else {
+                // 创建普通敌人
+                const enemy = new Enemy(this, config.x, config.y, config.type);
+                enemy.setTarget(this.player);
+                enemy.monsterId = config.id; // 设置唯一标识
+                this.enemies.add(enemy);
+            }
+        }
+        // 从其他场景回来时
+        else {
+            // 初始进入场景，创建所有怪物
+            if (!hasSpawnPoint) {
+                console.log(`初始创建怪物: ${config.id}`);
+                if (config.type === "boss") {
+                    // 创建Boss
+                    this.myBoss = new Boss(this, config.x, config.y, "enemy1");
+                    this.myBoss.setTarget(this.player);
+                    this.myBoss.monsterId = config.id; // 设置唯一标识
+                    this.bossesGroup = this.physics.add.group({ runChildUpdate: true });
+                    this.bossesGroup.add(this.myBoss);
+                    this.bossWallsCollider = this.physics.add.collider(this.bossesGroup, [this.walls1Layer, this.walls2Layer]);
+                } else {
+                    // 创建普通敌人
+                    const enemy = new Enemy(this, config.x, config.y, config.type);
+                    enemy.setTarget(this.player);
+                    enemy.monsterId = config.id; // 设置唯一标识
+                    this.enemies.add(enemy);
+                }
+            }
+            // 存活区的怪物（未死亡），每次进出场景刷新
+            else if (!isDead) {
+                console.log(`刷新存活区怪物: ${config.id}`);
+                if (config.type === "boss") {
+                    // 创建Boss
+                    this.myBoss = new Boss(this, config.x, config.y, "enemy1");
+                    this.myBoss.setTarget(this.player);
+                    this.myBoss.monsterId = config.id; // 设置唯一标识
+                    this.bossesGroup = this.physics.add.group({ runChildUpdate: true });
+                    this.bossesGroup.add(this.myBoss);
+                    this.bossWallsCollider = this.physics.add.collider(this.bossesGroup, [this.walls1Layer, this.walls2Layer]);
+                } else {
+                    // 创建普通敌人
+                    const enemy = new Enemy(this, config.x, config.y, config.type);
+                    enemy.setTarget(this.player);
+                    enemy.monsterId = config.id; // 设置唯一标识
+                    this.enemies.add(enemy);
+                }
+            }
+            // 死亡区的怪物（已死亡），不刷新
+            else {
+                console.log(`跳过死亡区怪物: ${config.id}`);
+            }
+        }
+    });
+    
+    // 只有在创建了敌人时才添加碰撞器
+    if (this.enemies.getChildren().length > 0) {
+        // 构建有效的碰撞图层数组
+        const validWallLayers = [];
+        if (this.walls1Layer) validWallLayers.push(this.walls1Layer);
+        if (this.walls2Layer) validWallLayers.push(this.walls2Layer);
+        
+        // 为敌人设置与地面的碰撞
+        if (validWallLayers.length > 0) {
+            this.enemyWallsCollider = this.physics.add.collider(this.enemies, validWallLayers);
+        }
+        
+        // 【核心新增：处理小怪碰触玩家的伤害判定】
+        // 不要用 collider (那会像推箱子)，要用 overlap 配合专用的击退逻辑
+        this.enemyPlayerOverlap = this.physics.add.overlap(this.player, this.enemies, (p, e) => {
+            const enemy = e as any;
+            const player = p as any;
+            
+            // 如果小怪还活着，并且玩家没在无敌状态，就造成伤害
+            // 这里我们简化：小怪每次碰触固定造成 0.5 伤害
+            player.takeDamage(0.5, enemy.x, enemy.y);
+        });
+    }
     
     // 【极其重要】：屏蔽浏览器的右键菜单，否则一按右键就弹出网页选项！
     this.input.mouse!.disableContextMenu();
     
-    // 清理所有现有的Boss实例
-    console.log("清理残留的Boss实例");
-    
-    // 创建Boss
-    console.log("创建Boss实例:", this.myBoss ? "已存在" : "新创建");
-    this.myBoss = new Boss(this, playerX + 200, playerY + 200, "enemy1");
-    this.myBoss.setTarget(this.player);
-    this.bossesGroup = this.physics.add.group({ runChildUpdate: true });
-    this.bossesGroup.add(this.myBoss);
-    this.bossWallsCollider = this.physics.add.collider(this.bossesGroup, [this.walls1Layer, this.walls2Layer]);
-    console.log("Boss创建完成，当前Boss实例数量:", this.bossesGroup.getChildren().length);
-    
-    // Boss 触碰伤害 (0.5格血)
-    this.bossPlayerOverlap = this.physics.add.overlap(this.player, this.bossesGroup, (p, b) => {
-        const boss = b as Boss;
-        if (!boss.isStaggered()) { // 虚弱时碰它不掉血
-            (p as Player).takeDamage(boss.getContactDamage(), boss.x, boss.y);
+    // 只有在创建了Boss时才添加Boss相关的逻辑
+    if (this.myBoss) {
+        // Boss 触碰伤害 (0.5格血)
+        if (this.bossesGroup && this.bossesGroup.getChildren().length > 0) {
+            this.bossPlayerOverlap = this.physics.add.overlap(this.player, this.bossesGroup, (p, b) => {
+                const boss = b as Boss;
+                if (!boss.isStaggered()) { // 虚弱时碰它不掉血
+                    (p as Player).takeDamage(boss.getContactDamage(), boss.x, boss.y);
+                }
+            });
         }
-    });
-    
-    // 监听 Boss 的 AOE 技能 1
-    this.events.removeAllListeners('boss-aoe');
-    this.events.on('boss-aoe', (zone: any, damage: number) => {
-        this.physics.overlap(this.player, zone, () => {
-            this.player.takeDamage(damage, zone.x, zone.y);
+        
+        // 监听 Boss 的 AOE 技能 1
+        this.events.removeAllListeners('boss-aoe');
+        this.events.on('boss-aoe', (zone: any, damage: number) => {
+            this.physics.overlap(this.player, zone, () => {
+                this.player.takeDamage(damage, zone.x, zone.y);
+            });
         });
-    });
+    }
     
-    // 监听 Boss 的召唤技能 2
-    this.events.removeAllListeners('boss-summon');
-    this.events.on('boss-summon', (bx: number, by: number) => {
-        console.log("Boss 召唤了小怪！");
-        // 在 Boss 身边刷两只普通 Enemy
-        for(let i=-1; i<=1; i+=2) {
-            const slime = new Enemy(this, bx + i*40, by + 40, "enemy0");
-            slime.setTarget(this.player);
-            this.enemies.add(slime);
-        }
-    });
-    
-    // ==========================================
-    // 【史诗机制：鼠标右键处决！】
-    // ==========================================
-    this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
-        // 判断是否是点击了鼠标右键
-        if (pointer.rightButtonDown() && this.myBoss && this.myBoss.active) {
-            const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.myBoss.x, this.myBoss.y);
-            
-            // 处决条件：必须靠得很近 (80像素内) + Boss必须在虚弱状态
-            if (dist < 80 && this.myBoss.isStaggered()) {
-                this.myBoss.execute(); // 执行处决！
+    // 只有在创建了Boss时才添加Boss相关的监听器
+    if (this.myBoss) {
+        // 监听 Boss 的召唤技能 2
+        this.events.removeAllListeners('boss-summon');
+        this.events.on('boss-summon', (bx: number, by: number) => {
+            console.log("Boss 召唤了小怪！");
+            // 在 Boss 身边刷两只普通 Enemy
+            for(let i=-1; i<=1; i+=2) {
+                const slime = new Enemy(this, bx + i*40, by + 40, "enemy0");
+                slime.setTarget(this.player);
+                this.enemies.add(slime);
             }
-        }
-    });
+        });
+        
+        // ==========================================
+        // 【史诗机制：鼠标右键处决！】
+        // ==========================================
+        this.input.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+            // 判断是否是点击了鼠标右键
+            if (pointer.rightButtonDown() && this.myBoss && this.myBoss.active) {
+                const dist = Phaser.Math.Distance.Between(this.player.x, this.player.y, this.myBoss.x, this.myBoss.y);
+                
+                // 处决条件：必须靠得很近 (80像素内) + Boss必须在虚弱状态
+                if (dist < 80 && this.myBoss.isStaggered()) {
+                    this.myBoss.execute(); // 执行处决！
+                }
+            }
+        });
+    }
 
     // 5. 批量渲染 Above 层 (不需要碰撞，但必须遮挡玩家)
     const aboveLayers = ["Above1", "Above2", "Above3"];
@@ -334,19 +499,6 @@ export default class GameScene extends Phaser.Scene {
       this.blockCollider = this.physics.add.collider(this.player, this.blockLayer);
       this.blockCollider.active = false; // 默认关闭Block图层的碰撞
     }
-    
-    // ==========================================
-    // 【核心新增：处理小怪碰触玩家的伤害判定】
-    // ==========================================
-    // 不要用 collider (那会像推箱子)，要用 overlap 配合专用的击退逻辑
-    this.enemyPlayerOverlap = this.physics.add.overlap(this.player, this.enemies, (p, e) => {
-        const enemy = e as any;
-        const player = p as any;
-        
-        // 如果小怪还活着，并且玩家没在无敌状态，就造成伤害
-        // 这里我们简化：小怪每次碰触固定造成 0.5 伤害
-        player.takeDamage(0.5, enemy.x, enemy.y);
-    });
 
     // 7. 设置世界边界和摄像机 (保持不变)
     this.physics.world.setBounds(
@@ -422,7 +574,7 @@ export default class GameScene extends Phaser.Scene {
 
 
     // 3. 解析 Tiled 的对象层
-    const interactZones = this.physics.add.staticGroup(); // 把所有交互区装在一起
+    this.interactZones = this.physics.add.staticGroup(); // 把所有交互区装在一起
 
     if (triggerLayer && triggerLayer.objects) {
         triggerLayer.objects.forEach(obj => {
@@ -442,25 +594,31 @@ export default class GameScene extends Phaser.Scene {
                     const ground2Layer = this.map.getLayer('Ground2')!.tilemapLayer;
                     const openDoorID = 303;
                     if (ground2Layer) {
+                        // 替换两个地块的ID（假设是上下两个地块）
                         ground2Layer.putTileAtWorldXY(openDoorID, this.doorSolid.x, this.doorSolid.y);
+                        ground2Layer.putTileAtWorldXY(openDoorID, this.doorSolid.x + 16, this.doorSolid.y);
                         console.log("门已经被打开，直接显示开门的图案");
                     }
                     // 销毁物理阻挡体
                     this.doorSolid.destroy();
                 }
             }
-            else if (obj.name === 'zone_locked' || obj.name === 'zone_unlock' || obj.name.startsWith('chest_') || obj.name.startsWith('ladder_') || obj.name.startsWith('door_')) {
+            else if (obj.name === 'zone_locked' || obj.name === 'zone_unlock' || obj.name.startsWith('chest_') || obj.name.startsWith('ladder_') || obj.name.startsWith('door_') || obj.name.startsWith('trigger_')) {
                 // 把交互区加到组里
                 zone.name = obj.name; // 把名字传给物理盒子
-                interactZones.add(zone);
+                this.interactZones.add(zone);
             }
         });
     }
 
     // 4. 设置持续重叠检测 (类似梯子的做法)
-    this.physics.add.overlap(this.player, interactZones, this.onInteractZone, undefined, this);
+    this.physics.add.overlap(this.player, this.interactZones, this.onInteractZone, undefined, this);
 
     this.scene.launch("UIScene");
+    
+    // 初始化键盘输入
+    this.cursors = this.input.keyboard!.createCursorKeys();
+    this.wasd = this.input.keyboard!.addKeys("W,A,S,D") as any;
 
     // ==========================================
     // 【测试机制】：按一下键盘的 H 键，模拟掉半格血
@@ -499,7 +657,10 @@ export default class GameScene extends Phaser.Scene {
             }
         };
 
-        this.physics.overlap(hitbox, this.enemies, (_box, e) => hitEnemy(e));
+        // 只有在创建了怪物的情况下才进行重叠检测
+        if (this.enemies && this.enemies.getChildren().length > 0) {
+            this.physics.overlap(hitbox, this.enemies, (_box, e) => hitEnemy(e));
+        }
         if (this.myBoss && this.myBoss.active) {
             this.physics.overlap(hitbox, this.myBoss, (_box, b) => hitEnemy(b));
         }
@@ -540,14 +701,14 @@ export default class GameScene extends Phaser.Scene {
     if (this.enemies) {
       console.log("清理敌人组，当前数量:", this.enemies.getChildren().length);
       this.enemies.clear(true, true);
-      this.enemies = null!;
+      // 不要设置为null，避免物理碰撞器引用错误
     }
     
     // 清理Boss组
     if (this.bossesGroup) {
       console.log("清理Boss组，当前数量:", this.bossesGroup.getChildren().length);
       this.bossesGroup.clear(true, true);
-      this.bossesGroup = null!;
+      // 不要设置为null，避免物理碰撞器引用错误
     }
     
     // 清理物理碰撞器
@@ -605,22 +766,43 @@ export default class GameScene extends Phaser.Scene {
   update() {
     if (!this.player) return;
 
+    // 在每帧开始时重置交互区域
+    this.activeInteractZone = "";
+    
+    // 手动检查玩家是否在交互区域内
+    if (this.interactZones) {
+        this.interactZones.getChildren().forEach((zone: any) => {
+            if (Phaser.Geom.Rectangle.Overlaps(this.player.getBounds(), zone.getBounds())) {
+                this.activeInteractZone = zone.name;
+            }
+        });
+    }
+    
     this.player.update(); // 更新玩家
     
     // ==========================================
     // 【新增 3：苍蝇宠物平滑跟随算法】
     // ==========================================
     if (this.flyPet) {
-        // 苍蝇飞在玩家头顶偏右后方
-        const targetX = this.player.x + (this.player.flipX ? 20 : -20);
-        const targetY = this.player.y - 30;
+        // 只有在键盘状态改变时更新状态
+        if (this.cursors.left.isDown || this.wasd.A.isDown) {
+            // 输入左时，保持默认（不镜像）
+            this.isFlyFlipped = false;
+        } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
+            // 输入右时，保持镜像
+            this.isFlyFlipped = true;
+        }
         
-        // Lerp (线性插值)：让苍蝇有弹性地平滑跟随，极具高级感！
+        // 苍蝇飞在玩家头顶偏右后方（距离更近）
+        const targetX = this.player.x + (this.isFlyFlipped ? -15 : 15);
+        const targetY = this.player.y - 15;
+        
+        // Lerp (线性插值)：让苍蝇有弹性地平滑跟随
         this.flyPet.x += (targetX - this.flyPet.x) * 0.05;
         this.flyPet.y += (targetY - this.flyPet.y) * 0.05;
         
-        // 根据玩家方向翻转苍蝇
-        this.flyPet.setFlipX(this.player.x < this.flyPet.x);
+        // 根据状态设置苍蝇镜像
+        this.flyPet.setFlipX(this.isFlyFlipped);
     }
     
     // 检测Boss是否在相机视野内
@@ -693,14 +875,24 @@ export default class GameScene extends Phaser.Scene {
                 console.log("获得【嗜血魔蝇】！重击附带叠层流血与吸血！");
                 this.player.hasFly = true;
                 // 生成苍蝇宠物实体
-                this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly-sprite').setScale(0.8);
-                // this.flyPet.anims.play('fly-flap', true); // 如果有扇翅膀动画
+                this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);
+                // 苍蝇动画（2x4网格，8帧）
+                this.anims.create({
+                    key: 'fly-flap',
+                    frames: this.anims.generateFrameNumbers('fly', { start: 0, end: 7 }),
+                    frameRate: 10,
+                    repeat: -1
+                });
+                this.flyPet.anims.play('fly-flap', true);
+                // 设置图层深度高于玩家
+                this.flyPet.setDepth(10);
             }
         }
         else if (this.activeInteractZone === 'zone_locked') {
             // 玩家在错误的一侧按了F键
             if (!this.isDoorOpen) {
-                // 不需要显示消息
+                // 显示UI提示
+                this.game.events.emit('show-message', '不能从这一侧打开');
             }
         }
         else if (this.activeInteractZone === 'zone_unlock') {
@@ -717,7 +909,7 @@ export default class GameScene extends Phaser.Scene {
                     if (!(this.game as any).globalState) {
                         (this.game as any).globalState = {};
                     }
-                    (this.game as any).globalState.doorOpen = true;
+                    (this.game as any).globalState.gameSceneDoorOpen = true;
                     console.log("门的状态已保存到全局对象");
                     
                     // ==========================================
@@ -738,10 +930,9 @@ export default class GameScene extends Phaser.Scene {
                     if (ground2Layer) {
                         // Phaser 的神级 API：直接在这个世界坐标上放置一个新的图块
                         // 参数：(新图块的ID, 世界X坐标, 世界Y坐标)
+                        // 替换两个地块的ID（水平方向的两个地块）
                         ground2Layer.putTileAtWorldXY(openDoorID, this.doorSolid.x, this.doorSolid.y);
-                        
-                        // (可选进阶：如果你的门占了两个格子(比如上下两格)，你需要 put 两次)
-                        // ground2Layer.putTileAtWorldXY(openDoorID_Top, this.doorSolid.x, this.doorSolid.y - 16);
+                        ground2Layer.putTileAtWorldXY(openDoorID, this.doorSolid.x + 16, this.doorSolid.y);
                     }
                 }
             }
@@ -772,13 +963,13 @@ export default class GameScene extends Phaser.Scene {
       this.scene.start(targetScene, { 
         spawnPoint: spawnPoint, 
         offsetX: offsetX,
-        hasGauntlet: this.player.hasGauntlet
+        hasGauntlet: this.player.hasGauntlet,
+        hasFly: this.player.hasFly,
+        playerHealth: this.player.health,
+        playerMaxHealth: this.player.maxHealth
       });
     });
   }
-
-
-
 
 
   // 当玩家在天桥上时
@@ -811,6 +1002,10 @@ export default class GameScene extends Phaser.Scene {
     } else {
       console.error("Block图层未初始化");
     }
+    
+    // 碰撞框大小减半
+    this.player.body?.setSize(12, 14);
+    this.player.body?.setOffset(10, 14);
   }
 
   // 当玩家在桥下时
@@ -843,5 +1038,9 @@ export default class GameScene extends Phaser.Scene {
     } else {
       console.error("Block图层未初始化");
     }
+    
+    // 恢复原碰撞框大小
+    this.player.body?.setSize(16, 20);
+    this.player.body?.setOffset(8, 9);
   }
 }

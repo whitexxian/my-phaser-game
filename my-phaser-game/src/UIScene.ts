@@ -12,6 +12,10 @@ export default class UIScene extends Phaser.Scene {
   private bossCurrentHealth: number = 20;
   private bossNameText!: Phaser.GameObjects.Text;
   private bossDamageText!: Phaser.GameObjects.Text;
+  
+  // 提示消息相关
+  private messageText!: Phaser.GameObjects.Text;
+  private messageTween!: Phaser.Tweens.Tween;
 
   constructor() {
     // 给这个场景起个名字叫 'UIScene'
@@ -47,6 +51,26 @@ export default class UIScene extends Phaser.Scene {
     this.game.events.on("update-boss-health", this.updateBossHealthUI, this);
     this.game.events.on("show-boss-health", this.showBossHealthBar, this);
     this.game.events.on("hide-boss-health", this.hideBossHealthBar, this);
+    
+    // 监听提示消息事件
+    this.game.events.on("show-message", this.showMessage, this);
+    
+    // 创建提示消息文本
+    this.messageText = this.add.text(
+      this.cameras.main.width / 2,
+      this.cameras.main.height - 100,
+      '',
+      {
+        fontSize: '35px',
+        fontFamily: 'Arial',
+        color: '#ffffff',
+        align: 'center'
+      }
+    );
+    this.messageText.setOrigin(0.5);
+    this.messageText.setScrollFactor(0);
+    this.messageText.setDepth(1002);
+    this.messageText.alpha = 0;
   }
 
   // 更新 UI 的核心逻辑
@@ -154,5 +178,30 @@ export default class UIScene extends Phaser.Scene {
     if (this.bossDamageText) {
       this.bossDamageText.destroy();
     }
+  }
+  
+  // 显示提示消息
+  private showMessage(message: string) {
+    // 如果有正在运行的tween，先停止它
+    if (this.messageTween && this.messageTween.isPlaying()) {
+      this.messageTween.stop();
+    }
+    
+    // 设置消息文本
+    this.messageText.setText(message);
+    
+    // 淡入动画
+    this.messageTween = this.tweens.add({
+      targets: this.messageText,
+      alpha: 1,
+      duration: 1000,
+      ease: 'Power1.easeOut',
+      yoyo: true,
+      repeat: 2,
+      repeatDelay: 500,
+      onComplete: () => {
+        this.messageText.alpha = 0;
+      }
+    });
   }
 }

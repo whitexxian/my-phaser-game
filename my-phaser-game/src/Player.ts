@@ -72,13 +72,20 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   // 【新增：翻滚派生攻击标志】
   private canDashAttack: boolean = false;
 
-  constructor(scene: Phaser.Scene, x: number, y: number, texture: string, hasGauntlet: boolean = false) {
+  constructor(scene: Phaser.Scene, x: number, y: number, texture: string, hasGauntlet: boolean = false, playerHealth: number = 3, playerMaxHealth: number = 3, hasFly: boolean = false) {
     // 根据是否有拳套设置初始纹理
     const initialTexture = hasGauntlet ? 'player_new' : texture;
     super(scene, x, y, initialTexture);
     
     // 设置拳套状态
     this.hasGauntlet = hasGauntlet;
+    
+    // 设置苍蝇状态
+    this.hasFly = hasFly;
+    
+    // 设置初始血量和最大血量
+    this.health = playerHealth;
+    this.maxHealth = playerMaxHealth;
 
     scene.add.existing(this);
     scene.physics.add.existing(this);
@@ -621,7 +628,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       y: this.y,
       direction: this.currentDirection,
       sceneName: this.scene.sys.config,
-      hasGauntlet: this.hasGauntlet
+      hasGauntlet: this.hasGauntlet,
+      hasFly: this.hasFly,
+      health: this.health,
+      maxHealth: this.maxHealth
     };
     
     // 保存状态到全局
@@ -762,7 +772,41 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
           this.shadow.destroy();
       }
       
-      console.log("GAME OVER");
-      // 这里未来可以触发黑屏，或者弹回主菜单的逻辑
+      console.log("死亡！传送回bed区域...");
+      
+      // 获取上次休息的重生点
+      const globalState = (this.scene.game as any).globalState;
+      const lastRestPoint = globalState?.lastRestPoint || { scene: "TwoFloorScene", spawnPoint: "bed" };
+      
+      // 创建黑屏覆盖层
+      const blackScreen = this.scene.add.rectangle(
+          this.scene.cameras.main.width / 2,
+          this.scene.cameras.main.height / 2,
+          this.scene.cameras.main.width,
+          this.scene.cameras.main.height,
+          0x000000,
+          0
+      );
+      blackScreen.setDepth(10000);
+      
+      // 延迟一下再传送，让死亡动画播放一下
+      this.scene.time.delayedCall(1000, () => {
+          // 黑屏淡入
+          this.scene.tweens.add({
+              targets: blackScreen,
+              alpha: 1,
+              duration: 500,
+              onComplete: () => {
+                  // 重启场景并传送到bed区域
+                  this.scene.scene.start(lastRestPoint.scene, {
+                      spawnPoint: lastRestPoint.spawnPoint,
+                      playerHealth: this.maxHealth, // 回满最大血量
+                      playerMaxHealth: this.maxHealth, // 传递最大血量
+                      hasGauntlet: this.hasGauntlet,
+                      shouldRespawnMonsters: true // 死亡时刷新所有怪物
+                  });
+              }
+          });
+      });
   }
 }

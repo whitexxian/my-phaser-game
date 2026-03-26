@@ -4,6 +4,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     public health: number = 3; // 史莱姆有 3 格血
     private isDead: boolean = false;
     private isHurt: boolean = false; // 受伤硬直状态
+    public monsterId: string = ""; // 怪物唯一标识
     
     // 【新增：AI 属性】
     protected speed: number = 50; // 小怪通常比玩家慢很多
@@ -21,7 +22,7 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     
     // 【新增：DOT系统】
     private bleedStacks: number = 0; // 流血层数
-    private bleedTimer: Phaser.Time.TimerEvent | null = null;
+    protected bleedTimer: Phaser.Time.TimerEvent | null = null;
 
     constructor(scene: Phaser.Scene, x: number, y: number, texture: string, frame?: number) {
         super(scene, x, y, texture, frame);
@@ -130,6 +131,21 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         this.setVelocity(0, 0);
         this.setTint(0x444444); // 变成灰色尸体
         console.log("史莱姆被击败了！");
+        
+        // 清理流血计时器，防止游戏卡死
+        if (this.bleedTimer) {
+            this.bleedTimer.remove();
+            this.bleedTimer = null;
+        }
+        
+        // 更新全局状态中的死亡记录
+        if (this.monsterId) {
+            const globalState = (this.scene.game as any).globalState || {};
+            globalState.deadMonsters = globalState.deadMonsters || {};
+            globalState.deadMonsters[this.monsterId] = true;
+            (this.scene.game as any).globalState = globalState;
+            console.log(`怪物 ${this.monsterId} 已标记为死亡`);
+        }
 
         // 播放死亡动画，然后销毁
         this.scene.time.delayedCall(500, () => {

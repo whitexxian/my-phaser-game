@@ -6,6 +6,20 @@ export default class HouseScene extends Phaser.Scene {
   private map!: Phaser.Tilemaps.Tilemap;
   private activeInteractZone: string = "";
   private openedChests = new Set<string>();
+  private interactZones!: Phaser.Physics.Arcade.StaticGroup;
+  private flyPet: Phaser.GameObjects.Sprite | null = null;
+  private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
+  private wasd!: {
+    W: Phaser.Input.Keyboard.Key;
+    A: Phaser.Input.Keyboard.Key;
+    S: Phaser.Input.Keyboard.Key;
+    D: Phaser.Input.Keyboard.Key;
+  };
+  private isFlyFlipped: boolean = false;
+  
+  // 【魂系单向门系统】
+  private isDoorOpen: boolean = false; // 门的状态
+  private doorSolid!: Phaser.GameObjects.Zone; // 门的物理阻挡体
 
   constructor() {
     super("HouseScene");
@@ -23,6 +37,12 @@ export default class HouseScene extends Phaser.Scene {
     this.load.image("terrian-image", "assets/maps/terrian.png"); // 加载瓦片图
     this.load.tilemapTiledJSON("map", "assets/maps/level1.json"); // 加载你画的地图
     this.load.tilemapTiledJSON("house-map", "assets/maps/house.json");
+    
+    // 加载苍蝇飞行动作帧
+    this.load.spritesheet("fly", "assets/fly.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
   }
 
   create() {
@@ -134,14 +154,43 @@ export default class HouseScene extends Phaser.Scene {
     }
    // 获取hasGauntlet状态（优先从全局状态恢复，其次从场景设置）
     let hasGauntlet = false;
+    let hasFly = false;
+    let playerHealth = 3;
+    let playerMaxHealth = 3;
+    
     if (savedState) {
       hasGauntlet = savedState.hasGauntlet || false;
+      hasFly = savedState.hasFly || false;
+      playerHealth = savedState.health || 3;
+      playerMaxHealth = savedState.maxHealth || 3;
     } else {
       hasGauntlet = this.scene.settings.data && (this.scene.settings.data as any).hasGauntlet || false;
+      hasFly = this.scene.settings.data && (this.scene.settings.data as any).hasFly || false;
+      playerHealth = this.scene.settings.data && (this.scene.settings.data as any).playerHealth || 3;
+      playerMaxHealth = this.scene.settings.data && (this.scene.settings.data as any).playerMaxHealth || 3;
     }
     
     // 创建玩家
-    this.player = new Player(this, playerX, playerY, "player", hasGauntlet);
+    this.player = new Player(this, playerX, playerY, "player", hasGauntlet, playerHealth, playerMaxHealth, hasFly);
+    
+    // 发送全局事件更新UI血量和最大血量显示
+    this.game.events.emit("update-health", this.player.health);
+    this.game.events.emit("update-max-health", this.player.maxHealth, this.player.health);
+    
+    // 创建苍蝇（如果玩家已经有苍蝇）
+    if (this.player.hasFly) {
+        this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);
+        // 苍蝇动画（2x4网格，8帧）
+        this.anims.create({
+            key: 'fly-flap',
+            frames: this.anims.generateFrameNumbers('fly', { start: 0, end: 7 }),
+            frameRate: 10,
+            repeat: -1
+        });
+        this.flyPet.anims.play('fly-flap', true);
+        // 设置图层深度高于玩家
+        this.flyPet.setDepth(10);
+    }
 
     // 5. 批量渲染 Above 层 (不需要碰撞，但必须遮挡玩家)
     const aboveLayers = ["Above"];
@@ -177,7 +226,7 @@ export default class HouseScene extends Phaser.Scene {
     // ==========================================    
     // 【核心新增：解析 Tiled 里的隐形传送门！】
     // ==========================================
-    const interactZones = this.physics.add.staticGroup();
+    this.interactZones = this.physics.add.staticGroup();
 
     if (triggerLayer && triggerLayer.objects) {
       // 遍历这个层里的所有对象 (我们刚才画的矩形框)
@@ -191,13 +240,30 @@ export default class HouseScene extends Phaser.Scene {
 
         // 给这个空气盒子加上物理引擎
         this.physics.add.existing(zone, true); // true 代表是静态物体
-        zone.name = obj.name;
-        interactZones.add(zone);
+        
+        if (obj.name === 'door_solid') {
+            // 找到门的阻挡体，存起来
+            this.doorSolid = zone;
+            
+            // 如果从全局状态读取到门已经打开，就直接销毁阻挡体
+            if ((this.game as any).globalState && (this.game as any).globalState.houseSceneDoorOpen) {
+                this.isDoorOpen = true;
+                this.doorSolid.destroy();
+            } else {
+                // 门未打开，添加物理碰撞
+                this.physics.add.collider(this.player, this.doorSolid);
+            }
+        }
+        else if (obj.name === 'zone_locked' || obj.name === 'zone_unlock' || obj.name.startsWith('chest_') || obj.name.startsWith('ladder_') || obj.name.startsWith('door_')) {
+            // 把交互区加到组里
+            zone.name = obj.name; // 把名字传给物理盒子
+            this.interactZones.add(zone);
+        }
       });
     }
 
     // 交互检测
-    this.physics.add.overlap(this.player, interactZones, this.onInteractZone, undefined, this);
+    this.physics.add.overlap(this.player, this.interactZones, this.onInteractZone, undefined, this);
 
     // 交互按键（仅用于门和其他梯子）
     if (this.input.keyboard) {
@@ -214,6 +280,10 @@ export default class HouseScene extends Phaser.Scene {
     }
 
     this.scene.launch("UIScene");
+    
+    // 初始化键盘输入
+    this.cursors = this.input.keyboard!.createCursorKeys();
+    this.wasd = this.input.keyboard!.addKeys("W,A,S,D") as any;
 
     // ==========================================
     // 【测试机制】：按一下键盘的 H 键，模拟掉半格血
@@ -231,7 +301,42 @@ export default class HouseScene extends Phaser.Scene {
   }
 
   update() {
+    // 在每帧开始时重置交互区域
+    this.activeInteractZone = "";
+    
+    // 手动检查玩家是否在交互区域内
+    if (this.interactZones) {
+        this.interactZones.getChildren().forEach((zone: any) => {
+            if (Phaser.Geom.Rectangle.Overlaps(this.player.getBounds(), zone.getBounds())) {
+                this.activeInteractZone = zone.name;
+            }
+        });
+    }
+    
     this.player.update();
+    
+    // 苍蝇跟随玩家
+    if (this.flyPet) {
+        // 只有在键盘状态改变时更新状态
+        if (this.cursors.left.isDown || this.wasd.A.isDown) {
+            // 输入左时，保持默认（不镜像）
+            this.isFlyFlipped = false;
+        } else if (this.cursors.right.isDown || this.wasd.D.isDown) {
+            // 输入右时，保持镜像
+            this.isFlyFlipped = true;
+        }
+        
+        // 苍蝇飞在玩家头顶偏右后方（距离更近）
+        const targetX = this.player.x + (this.isFlyFlipped ? -10 : 10);
+        const targetY = this.player.y - 15;
+        
+        // Lerp (线性插值)：让苍蝇有弹性地平滑跟随
+        this.flyPet.x += (targetX - this.flyPet.x) * 0.05;
+        this.flyPet.y += (targetY - this.flyPet.y) * 0.05;
+        
+        // 根据状态设置苍蝇镜像
+        this.flyPet.setFlipX(this.isFlyFlipped);
+    }
   }
 
   // 交互区域检测
@@ -256,6 +361,33 @@ export default class HouseScene extends Phaser.Scene {
     // 从地下返回
     else if (this.activeInteractZone === "ladder_from_underground") {
       this.switchScene("UnderGroundScene", "ladder_to_chest");
+    }
+    // 单向门交互 - 错误侧
+    else if (this.activeInteractZone === 'zone_locked') {
+      // 玩家在错误的一侧按了F键
+      if (!this.isDoorOpen) {
+          // 显示UI提示
+          this.game.events.emit('show-message', '不能从这一侧打开');
+      }
+    }
+    // 单向门交互 - 正确侧
+    else if (this.activeInteractZone === 'zone_unlock') {
+      // 玩家在正确的一侧按了F键
+      if (!this.isDoorOpen) {
+          this.isDoorOpen = true;
+          
+          // 【核心】：门开了！销毁那个物理阻挡体，让玩家能穿过去！
+          if (this.doorSolid) {
+              this.doorSolid.destroy();
+              
+              // 保存门的状态到全局对象
+              if (!(this.game as any).globalState) {
+                  (this.game as any).globalState = {};
+              }
+              (this.game as any).globalState.houseSceneDoorOpen = true;
+              console.log("门的状态已保存到全局对象");
+          }
+      }
     }
     // 宝箱交互
     else if (this.activeInteractZone.startsWith('chest_') && !this.openedChests.has(this.activeInteractZone)) {
@@ -310,8 +442,10 @@ export default class HouseScene extends Phaser.Scene {
         console.log(`正在前往${targetScene}...`);
         this.scene.start(targetScene, {
           spawnPoint: spawnPoint,
-          playerHealth: 3, // 【重要】把当前的血量传给下一个场景！
+          playerHealth: this.player.health,
+          playerMaxHealth: this.player.maxHealth,
           hasGauntlet: this.player.hasGauntlet,
+          hasFly: this.player.hasFly,
         });
       },
     );
