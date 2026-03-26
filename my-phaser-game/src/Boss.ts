@@ -290,15 +290,15 @@ export default class Boss extends Enemy {
             const dir = new Phaser.Math.Vector2(this.targetPlayer.x - this.x, this.targetPlayer.y - this.y).normalize();
             
             // 设置冲刺速度
-            this.setVelocity(dir.x * 600, dir.y * 600);
+            this.setVelocity(dir.x * 800, dir.y * 800);
             
             // 根据方向设置镜像
             if (dir.x > 0) this.setFlipX(true);
             else if (dir.x < 0) this.setFlipX(false);
         }
 
-        // 冲刺持续0.5秒
-        this.scene.time.delayedCall(500, () => {
+        // 冲刺持续0.8秒
+        this.scene.time.delayedCall(800, () => {
             this.setVelocity(0, 0);
             this.endAction(true); // 传入true表示是技能三结束
         });
