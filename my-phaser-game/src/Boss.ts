@@ -236,19 +236,31 @@ export default class Boss extends Enemy {
             }
         }
         
-        console.log(`Boss选择技能: ${this.currentSkill}, 随机值: ${random}`);
+        console.log(`Boss选择技能: ${this.currentSkill}, 随机值: ${random}, 当前状态: ${this.currentState}`);
         this.poiseDamageTaken = 0; // 重置削韧值
 
         // 技能一：前摇1秒，技能二：前摇3秒，技能三：前摇0.2秒
         if (this.currentSkill === 1) {
             // 技能 1：前摇 1秒 -> 旋转 0.5秒
-            this.skillTimer = this.scene.time.delayedCall(1000, () => this.executeSkill1());
+            console.log("启动技能一定时器，延迟1000ms");
+            this.skillTimer = this.scene.time.delayedCall(1000, () => {
+                console.log("技能一定时器触发，调用executeSkill1");
+                this.executeSkill1();
+            });
         } else if (this.currentSkill === 2) {
             // 技能 2：前摇 3秒 -> 召唤 1秒
-            this.skillTimer = this.scene.time.delayedCall(3000, () => this.executeSkill2());
+            console.log("启动技能二定时器，延迟3000ms");
+            this.skillTimer = this.scene.time.delayedCall(3000, () => {
+                console.log("技能二定时器触发，调用executeSkill2");
+                this.executeSkill2();
+            });
         } else {
             // 技能 3：前摇 0.2秒 -> 冲刺 0.8秒
-            this.skillTimer = this.scene.time.delayedCall(200, () => this.executeSkill3());
+            console.log("启动技能三定时器，延迟200ms");
+            this.skillTimer = this.scene.time.delayedCall(200, () => {
+                console.log("技能三定时器触发，调用executeSkill3");
+                this.executeSkill3();
+            });
         }
     }
 
@@ -285,8 +297,12 @@ export default class Boss extends Enemy {
     }
 
     private executeSkill3() {
-        if (this.currentState !== BossState.WINDUP) return;
+        if (this.currentState !== BossState.WINDUP) {
+            console.log(`executeSkill3被调用，但当前状态不是WINDUP: ${this.currentState}`);
+            return;
+        }
         
+        console.log("开始播放技能三动画");
         this.currentState = BossState.SKILL_3; // 使用SKILL_3状态
         this.anims.play('boss-skill3', true);
 
