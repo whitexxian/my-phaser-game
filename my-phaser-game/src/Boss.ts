@@ -238,12 +238,15 @@ export default class Boss extends Enemy {
         
         this.poiseDamageTaken = 0; // 重置削韧值
 
-        // 所有技能前摇都是0.2秒
+        // 技能一：前摇1秒，技能二：前摇3秒，技能三：前摇0.2秒
         if (this.currentSkill === 1) {
-            this.skillTimer = this.scene.time.delayedCall(200, () => this.executeSkill1());
+            // 技能 1：前摇 1秒 -> 旋转 0.5秒
+            this.skillTimer = this.scene.time.delayedCall(1000, () => this.executeSkill1());
         } else if (this.currentSkill === 2) {
-            this.skillTimer = this.scene.time.delayedCall(200, () => this.executeSkill2());
+            // 技能 2：前摇 3秒 -> 召唤 1秒
+            this.skillTimer = this.scene.time.delayedCall(3000, () => this.executeSkill2());
         } else {
+            // 技能 3：前摇 0.2秒 -> 冲刺 0.8秒
             this.skillTimer = this.scene.time.delayedCall(200, () => this.executeSkill3());
         }
     }
