@@ -66,7 +66,7 @@ export default class Boss extends Enemy {
             // 10-13: 技能二的动作（第11-14张）
             scene.anims.create({ key: 'boss-skill2', frames: scene.anims.generateFrameNumbers(texture, { start: 10, end: 13 }), frameRate: 8, repeat: -1 });
             // 14-17: 技能三的动作（第15-18张）
-            scene.anims.create({ key: 'boss-skill3', frames: scene.anims.generateFrameNumbers(texture, { start: 14, end: 17 }), frameRate: 12, repeat: 0 });
+            scene.anims.create({ key: 'boss-skill3', frames: scene.anims.generateFrameNumbers(texture, { start: 14, end: 17 }), frameRate: 12, repeat: -1 });
         }
 
         this.anims.play('boss-move', true);
@@ -297,14 +297,18 @@ export default class Boss extends Enemy {
     }
 
     private executeSkill3() {
+        console.log(`executeSkill3被调用，当前状态: ${this.currentState}, 当前技能: ${this.currentSkill}`);
+        
         if (this.currentState !== BossState.WINDUP) {
             console.log(`executeSkill3被调用，但当前状态不是WINDUP: ${this.currentState}`);
             return;
         }
         
         console.log("开始播放技能三动画");
+        console.log(`播放动画前的当前动画: ${this.anims.currentAnim?.key}`);
         this.currentState = BossState.SKILL_3; // 使用SKILL_3状态
         this.anims.play('boss-skill3', true);
+        console.log(`播放动画后的当前动画: ${this.anims.currentAnim?.key}`);
 
         // 计算向玩家方向的冲刺方向
         if (this.targetPlayer) {
