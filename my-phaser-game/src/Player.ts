@@ -642,7 +642,13 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     
     // 刷新当前场景以确保立即生效
     console.log("刷新场景以应用拳套外观...");
-    this.scene.scene.restart();
+    this.scene.scene.restart({
+      spawnPoint: playerState.direction,
+      hasGauntlet: this.hasGauntlet,
+      hasFly: this.hasFly,
+      playerHealth: this.health,
+      playerMaxHealth: this.maxHealth
+    });
   }
 
   // ==========================================
@@ -803,6 +809,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
                       playerHealth: this.maxHealth, // 回满最大血量
                       playerMaxHealth: this.maxHealth, // 传递最大血量
                       hasGauntlet: this.hasGauntlet,
+                      hasFly: this.hasFly,
                       shouldRespawnMonsters: true // 死亡时刷新所有怪物
                   });
               }

@@ -324,6 +324,7 @@ export default class TwoFloorScene extends Phaser.Scene {
     this.scene.restart({
       spawnPoint: "bed",
       hasGauntlet: this.player.hasGauntlet,
+      hasFly: this.player.hasFly,
       playerHealth: this.player.maxHealth,
       playerMaxHealth: this.player.maxHealth,
       shouldRespawnMonsters: true
