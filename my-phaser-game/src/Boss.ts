@@ -7,8 +7,9 @@ export const BossState = {
     WINDUP: 1,     // 施法前摇
     SKILL_1: 2,    // 释放技能1 (旋转)
     SKILL_2: 3,    // 释放技能2 (召唤)
-    STAGGERED: 4,  // 破防/虚弱状态
-    DEAD: 5        // 死亡
+    SKILL_3: 4,    // 释放技能3 (冲刺)
+    STAGGERED: 5,  // 破防/虚弱状态
+    DEAD: 6        // 死亡
 } as const;
 
 export type BossState = typeof BossState[keyof typeof BossState];
@@ -172,8 +173,7 @@ export default class Boss extends Enemy {
         }
         
         // 只有技能三（冲刺）可以移动，其他状态都原地不动
-        // 技能三使用SKILL_2状态，但通过currentSkill === 3来区分
-        if (this.currentState !== BossState.CHASE && !(this.currentState === BossState.SKILL_2 && this.currentSkill === 3)) {
+        if (this.currentState !== BossState.CHASE && this.currentState !== BossState.SKILL_3) {
             this.setVelocity(0, 0);
             return;
         }
@@ -236,6 +236,7 @@ export default class Boss extends Enemy {
             }
         }
         
+        console.log(`Boss选择技能: ${this.currentSkill}, 随机值: ${random}`);
         this.poiseDamageTaken = 0; // 重置削韧值
 
         // 技能一：前摇1秒，技能二：前摇3秒，技能三：前摇0.2秒
@@ -286,7 +287,7 @@ export default class Boss extends Enemy {
     private executeSkill3() {
         if (this.currentState !== BossState.WINDUP) return;
         
-        this.currentState = BossState.SKILL_2; // 使用SKILL_2状态，因为没有SKILL_3状态
+        this.currentState = BossState.SKILL_3; // 使用SKILL_3状态
         this.anims.play('boss-skill3', true);
 
         // 计算向玩家方向的冲刺方向
