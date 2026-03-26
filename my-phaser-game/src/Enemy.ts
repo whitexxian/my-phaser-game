@@ -54,6 +54,10 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         this.healthBar.setDepth(100);
         this.updateHealthBar();
 
+        // 初始化流血状态
+        this.bleedStacks = 0;
+        this.bleedDurations = [];
+
         // 创建敌人动画
         this.createAnimations();
         
