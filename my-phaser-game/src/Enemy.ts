@@ -23,6 +23,8 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     // 【新增：DOT系统】
     private bleedStacks: number = 0; // 流血层数
     protected bleedTimer: Phaser.Time.TimerEvent | null = null;
+    private readonly MAX_BLEED_STACKS: number = 3; // 最大流血层数
+    private bleedDuration: number = 0; // 流血剩余持续时间（毫秒）
 
     constructor(scene: Phaser.Scene, x: number, y: number, texture: string, frame?: number) {
         super(scene, x, y, texture, frame);
@@ -187,14 +189,25 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     public applyBleed(scene: Phaser.Scene) {
         if (this.isDead) return;
         
+        // 检查是否已经达到最大层数
+        if (this.bleedStacks >= this.MAX_BLEED_STACKS) {
+            console.log(`怪物流血已达最大层数: ${this.MAX_BLEED_STACKS}`);
+            // 重置持续时间
+            this.bleedDuration = 15000; // 15秒
+            return;
+        }
+        
         // 增加流血层数
         this.bleedStacks++;
         console.log(`怪物流血层数: ${this.bleedStacks}`);
         
+        // 设置持续时间为15秒
+        this.bleedDuration = 15000; // 15秒
+        
         // 如果还没有流血计时器，就启动一个
         if (!this.bleedTimer) {
             this.bleedTimer = scene.time.addEvent({
-                delay: 1000, // 每秒触发一次
+                delay: 5000, // 每5秒触发一次
                 callback: this.onBleedTick,
                 callbackScope: this,
                 repeat: -1 // 无限重复
@@ -204,17 +217,24 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
     
     // 【新增：流血每Tick的伤害计算】
     private onBleedTick() {
-        if (this.isDead || this.bleedStacks <= 0) {
+        if (this.isDead || this.bleedStacks <= 0 || this.bleedDuration <= 0) {
             if (this.bleedTimer) {
                 this.bleedTimer.remove();
                 this.bleedTimer = null;
             }
+            this.bleedStacks = 0;
+            this.bleedDuration = 0;
             return;
         }
         
-        // 每层流血每秒造成0.5点伤害
+        // 减少持续时间
+        this.bleedDuration -= 5000; // 每次触发减少5秒
+        
+        // 每层流血每5秒造成0.5点伤害
         const bleedDamage = 0.5 * this.bleedStacks;
         this.health -= bleedDamage;
+        
+        console.log(`怪物流血触发！层数: ${this.bleedStacks}, 伤害: ${bleedDamage}, 剩余时间: ${this.bleedDuration / 1000}秒`);
         
         // 更新血条
         this.updateHealthBar();
