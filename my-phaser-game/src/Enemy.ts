@@ -201,6 +201,9 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
         this.bleedStacks++;
         console.log(`怪物流血层数: ${this.bleedStacks}`);
         
+        // 发送全局事件更新UI
+        this.scene.game.events.emit('update-boss-bleed', this.bleedStacks);
+        
         // 设置持续时间为15秒
         this.bleedDuration = 15000; // 15秒
         
@@ -222,8 +225,14 @@ export default class Enemy extends Phaser.Physics.Arcade.Sprite {
                 this.bleedTimer.remove();
                 this.bleedTimer = null;
             }
+            const oldStacks = this.bleedStacks;
             this.bleedStacks = 0;
             this.bleedDuration = 0;
+            
+            // 发送全局事件更新UI（层数变为0）
+            if (oldStacks > 0) {
+                this.scene.game.events.emit('update-boss-bleed', 0);
+            }
             return;
         }
         

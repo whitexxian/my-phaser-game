@@ -13,6 +13,10 @@ export default class UIScene extends Phaser.Scene {
   private bossNameText!: Phaser.GameObjects.Text;
   private bossDamageText!: Phaser.GameObjects.Text;
   
+  // 流血层数相关
+  private bossBleedIcons: Phaser.GameObjects.Image[] = [];
+  private bossCurrentBleedStacks: number = 0;
+  
   // 提示消息相关
   private messageText!: Phaser.GameObjects.Text;
   private messageTween!: Phaser.Tweens.Tween;
@@ -27,6 +31,14 @@ export default class UIScene extends Phaser.Scene {
     this.load.image("heart-full", "assets/ui/heart_full.png");
     this.load.image("heart-half", "assets/ui/heart_half.png");
     this.load.image("heart-empty", "assets/ui/heart_empty.png");
+    
+    // 加载流血层数图标
+    this.load.spritesheet("bleed-icons", "assets/ui/icon_bleeding.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+      startFrame: 0,
+      endFrame: 2
+    });
   }
 
   create() {
@@ -51,6 +63,9 @@ export default class UIScene extends Phaser.Scene {
     this.game.events.on("update-boss-health", this.updateBossHealthUI, this);
     this.game.events.on("show-boss-health", this.showBossHealthBar, this);
     this.game.events.on("hide-boss-health", this.hideBossHealthBar, this);
+    
+    // 监听Boss流血层数更新事件
+    this.game.events.on("update-boss-bleed", this.updateBossBleedUI, this);
     
     // 监听提示消息事件
     this.game.events.on("show-message", this.showMessage, this);
@@ -164,6 +179,36 @@ export default class UIScene extends Phaser.Scene {
       this.bossDamageText.destroy();
     }
     this.bossDamageText = damageText;
+    
+    // 更新流血层数UI
+    this.updateBossBleedUI(this.bossCurrentBleedStacks);
+  }
+  
+  // 更新Boss流血层数UI
+  private updateBossBleedUI(stacks: number) {
+    this.bossCurrentBleedStacks = stacks;
+    
+    // 清空旧的图标
+    this.bossBleedIcons.forEach(icon => icon.destroy());
+    this.bossBleedIcons = [];
+    
+    if (stacks <= 0) {
+      return;
+    }
+    
+    const width = 400;
+    const x = this.cameras.main.width / 2 - width / 2;
+    const y = this.cameras.main.height - 110; // 在血条上方
+    
+    // 创建流血层数图标
+    for (let i = 0; i < stacks; i++) {
+      const icon = this.add.image(x + 20 + i * 40, y, 'bleed-icons');
+      icon.setFrame(i); // 使用对应的帧（0, 1, 2）
+      icon.setScale(1.5);
+      icon.setScrollFactor(0);
+      icon.setDepth(1001);
+      this.bossBleedIcons.push(icon);
+    }
   }
   
   private showBossHealthBar() {
@@ -178,6 +223,9 @@ export default class UIScene extends Phaser.Scene {
     if (this.bossDamageText) {
       this.bossDamageText.destroy();
     }
+    // 清理流血图标
+    this.bossBleedIcons.forEach(icon => icon.destroy());
+    this.bossBleedIcons = [];
   }
   
   // 显示提示消息
