@@ -381,10 +381,6 @@ export default class Boss extends Enemy {
         this.setVelocity(0, 0);
         this.setTint(0x333333);
         console.log("【Boss 被击杀！】");
-        // 关闭血条
-        this.hideHealthBar();
-        // 设置为非活跃状态，防止update方法再次显示血条
-        this.setActive(false);
         
         // 清理流血计时器，防止游戏卡死
         if (this.bleedTimer) {
@@ -398,6 +394,11 @@ export default class Boss extends Enemy {
         
         // 立即更新UI，确保流血图标消失
         this.scene.game.events.emit('update-boss-bleed', 0);
+        
+        // 关闭血条
+        this.hideHealthBar();
+        // 设置为非活跃状态，防止update方法再次显示血条
+        this.setActive(false);
         
         // 更新全局状态中的死亡记录
         if (this.monsterId) {
@@ -425,6 +426,8 @@ export default class Boss extends Enemy {
     public showHealthBar() {
         this.scene.game.events.emit('show-boss-health');
         this.updateHealthBar();
+        // 更新流血状态UI，确保流血图标正确显示
+        (this as any).updateBleedUI();
     }
     
     public hideHealthBar() {
