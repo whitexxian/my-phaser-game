@@ -163,27 +163,29 @@ export default class Boss extends Enemy {
     
     private executeSkill2PhaseTransition() {
         if (this.currentState !== BossState.WINDUP) return;
-        
+
         this.currentState = BossState.SKILL_2;
         this.anims.play('boss-skill2', true);
         this.clearTint(); // 解除无敌视觉效果
         this.isPhaseTransitionInvincible = false; // 解除转阶段无敌
 
-        // 召唤 2 只小怪
         this.scene.events.emit('boss-summon', this.x, this.y);
 
         this.scene.time.delayedCall(1000, () => {
             this.endActionPhaseTransition();
         });
     }
-    
+
     private endActionPhaseTransition() {
         if (this.currentState === BossState.DEAD) return;
-        
-        // 转阶段结束，CD从此时开始记8秒
+
+        // 只有在SKILL_2状态下才执行转阶段结束逻辑
+        if (this.currentState !== BossState.SKILL_2) return;
+
         this.currentState = BossState.CHASE;
         this.clearTint();
-        this.skillCooldown = 8000; // 转阶段后CD为8秒
+        this.isPhaseTransitionInvincible = false; // 确保清除转阶段无敌标记
+        this.skillCooldown = 8000;
         console.log("转阶段结束，技能CD设为8秒");
     }
 
@@ -221,15 +223,18 @@ export default class Boss extends Enemy {
         this.currentState = BossState.STAGGERED;
         this.isExecutedThisStagger = false; // 重置处决标记，允许新的处决
         
-        // 1. 立即打断当前的任何定时器动作！
+        // 立即打断当前的任何定时器动作！
         if (this.skillTimer) this.skillTimer.remove();
         
-        // 2. 停下动作，变成蓝色暗示虚弱可处决
+        // 清除转阶段无敌标记
+        this.isPhaseTransitionInvincible = false;
+        
+        // 停下动作，变成蓝色暗示虚弱可处决
         this.setVelocity(0, 0);
         this.anims.stop();
         this.setTint(0x0088ff);
 
-        // 3. 虚弱 2 秒后，如果没有被处决，自动恢复
+        // 虚弱 2 秒后，如果没有被处决，自动恢复
         this.scene.time.delayedCall(2000, () => {
             if (this.currentState === BossState.STAGGERED) {
                 this.endAction();
@@ -470,32 +475,26 @@ export default class Boss extends Enemy {
 
     private endAction(isSkill3End: boolean = false) {
         if (this.currentState === BossState.DEAD) return;
-        
-        // 如果是技能三结束，检查是否需要触发额外的技能一
+
         if (isSkill3End) {
             const isHalfHealth = this.health > this.maxHealth / 2;
             let shouldTriggerSkill1 = false;
-            
+
             if (isHalfHealth) {
-                // 半血以上：25%概率触发技能一
                 shouldTriggerSkill1 = Phaser.Math.FloatBetween(0, 1) < 0.25;
             } else {
-                // 半血以下：100%概率触发技能一
                 shouldTriggerSkill1 = true;
             }
-            
+
             if (shouldTriggerSkill1) {
-                // 立即释放技能一（无前摇）
                 this.currentState = BossState.SKILL_1;
                 this.anims.play('boss-skill1', true);
-                
-                // 技能1效果：范围震动伤害
+
                 this.scene.cameras.main.shake(500, 0.001);
                 const aoe = this.scene.add.circle(this.x, this.y, 60);
                 this.scene.physics.add.existing(aoe);
                 this.scene.events.emit('boss-aoe', aoe, 1.0);
-                
-                // 添加攻击范围特效：烟雾爆炸效果
+
                 const particles = this.scene.add.particles(0, 0, 'smoke', {
                     x: this.x,
                     y: this.y,
@@ -509,25 +508,23 @@ export default class Boss extends Enemy {
                     gravityY: -80,
                     maxParticles: 30
                 });
-                
+
                 this.scene.time.delayedCall(500, () => {
                     aoe.destroy();
                     particles.destroy();
-                    // 从额外释放的技能一开始计算冷却
                     this.currentState = BossState.CHASE;
                     this.clearTint();
-                    // 根据血量设置CD
+                    this.isPhaseTransitionInvincible = false;
                     const isHalfHealth = this.health > this.maxHealth / 2;
                     this.skillCooldown = isHalfHealth ? 10000 : 8000;
                 });
                 return;
             }
         }
-        
-        // 正常结束动作
+
         this.currentState = BossState.CHASE;
         this.clearTint();
-        // 根据血量设置CD
+        this.isPhaseTransitionInvincible = false;
         const isHalfHealth = this.health > this.maxHealth / 2;
         this.skillCooldown = isHalfHealth ? 10000 : 8000;
     }
