@@ -30,6 +30,9 @@ export default class Boss extends Enemy {
     
     // 累计伤害统计（用于调试）
     private totalDamageTaken: number = 0;
+    private hasPhaseTransitioned: boolean = false; // 标记是否已经转阶段
+    private isPhaseTransitionInvincible: boolean = false; // 标记是否在转阶段无敌状态
+    private clearTintTimer: Phaser.Time.TimerEvent | null = null; // 用于清除tint的定时器
 
     constructor(scene: Phaser.Scene, x: number, y: number, texture: string) {
         // 指定使用第一个帧（帧索引0），避免显示整个精灵图
@@ -76,7 +79,8 @@ export default class Boss extends Enemy {
     // 【核心 1：重写受伤与削韧机制】
     // ==========================================
     public override takeDamage(damage: number, _attackerDirection: Phaser.Math.Vector2, _comboCount: number = 1) {
-        if (this.currentState === BossState.DEAD) return;
+        // 如果在转阶段无敌，则免疫伤害
+        if (this.currentState === BossState.DEAD || this.isPhaseTransitionInvincible) return;
 
         console.log(`Boss受到伤害: ${damage}, 当前状态: ${this.currentState}`);
 
@@ -92,12 +96,23 @@ export default class Boss extends Enemy {
         
         this.health -= finalDamage;
         this.setTint(0xff0000);
-        this.scene.time.delayedCall(100, () => { if (this.currentState !== BossState.STAGGERED && this.currentState !== BossState.DEAD) this.clearTint(); });
+        this.clearTintTimer = this.scene.time.delayedCall(100, () => { 
+            if (this.currentState !== BossState.STAGGERED && this.currentState !== BossState.DEAD) {
+                this.clearTint();
+                this.clearTintTimer = null;
+            }
+        });
         
         // 更新血条
         this.updateHealthBar();
 
-        // 2. 【破防判定】：只有在 技能二 的前摇和召唤期间，才会累积破防值
+        // 2. 【半血转阶段判定】
+        if (!this.hasPhaseTransitioned && this.health <= this.maxHealth / 2) {
+            this.triggerPhaseTransition();
+            return;
+        }
+
+        // 3. 【破防判定】：只有在 技能二 的前摇和召唤期间，才会累积破防值
         if (this.currentSkill === 2 && (this.currentState === BossState.WINDUP || this.currentState === BossState.SKILL_2)) {
             this.poiseDamageTaken += 1; // 假设每挨一拳增加 1 点破防值
             console.log(`Boss 积累破防值: ${this.poiseDamageTaken} / ${this.POISE_THRESHOLD}`);
@@ -108,6 +123,66 @@ export default class Boss extends Enemy {
         }
 
         if (this.health <= 0) this.die();
+    }
+    
+    // ==========================================
+    // 【核心 1.5：半血转阶段机制】
+    // ==========================================
+    private triggerPhaseTransition() {
+        this.hasPhaseTransitioned = true;
+        this.isPhaseTransitionInvincible = true; // 开启转阶段无敌
+        console.log("Boss半血转阶段！");
+        
+        // 立即打断当前的任何定时器动作！
+        if (this.skillTimer) this.skillTimer.remove();
+        
+        // 清除可能存在的清除tint定时器，防止它清除我们的金色tint
+        if (this.clearTintTimer) {
+            this.clearTintTimer.remove();
+            this.clearTintTimer = null;
+        }
+        
+        // 停止移动
+        this.setVelocity(0, 0);
+        
+        // 设置为技能2，前摇过程无敌
+        this.currentSkill = 2;
+        this.currentState = BossState.WINDUP;
+        this.anims.play('boss-windup', true);
+        this.setTint(0xffd700); // 金色表示无敌状态
+        
+        // 技能2前摇3秒（前摇过程无敌）
+        console.log("转阶段：启动技能二定时器，延迟3000ms（前摇无敌）");
+        this.skillTimer = this.scene.time.delayedCall(3000, () => {
+            console.log("转阶段：技能二定时器触发，调用executeSkill2");
+            this.executeSkill2PhaseTransition();
+        });
+    }
+    
+    private executeSkill2PhaseTransition() {
+        if (this.currentState !== BossState.WINDUP) return;
+        
+        this.currentState = BossState.SKILL_2;
+        this.anims.play('boss-skill2', true);
+        this.clearTint(); // 解除无敌视觉效果
+        this.isPhaseTransitionInvincible = false; // 解除转阶段无敌
+
+        // 召唤 2 只小怪
+        this.scene.events.emit('boss-summon', this.x, this.y);
+
+        this.scene.time.delayedCall(1000, () => {
+            this.endActionPhaseTransition();
+        });
+    }
+    
+    private endActionPhaseTransition() {
+        if (this.currentState === BossState.DEAD) return;
+        
+        // 转阶段结束，CD从此时开始记8秒
+        this.currentState = BossState.CHASE;
+        this.clearTint();
+        this.skillCooldown = 8000; // 转阶段后CD为8秒
+        console.log("转阶段结束，技能CD设为8秒");
     }
 
     // ==========================================
@@ -125,7 +200,7 @@ export default class Boss extends Enemy {
             this.die();
         } else {
             // 处决后，1秒后恢复行动，期间无敌
-            this.setTint(0xffff00); // 黄色表示无敌状态
+            this.setTint(0xffd700); // 金色表示无敌状态
             this.scene.time.delayedCall(1000, () => {
                 if (this.currentState !== BossState.DEAD) {
                     this.endAction();
@@ -377,7 +452,9 @@ export default class Boss extends Enemy {
                     // 从额外释放的技能一开始计算冷却
                     this.currentState = BossState.CHASE;
                     this.clearTint();
-                    this.skillCooldown = 10000;
+                    // 根据血量设置CD
+                    const isHalfHealth = this.health > this.maxHealth / 2;
+                    this.skillCooldown = isHalfHealth ? 10000 : 8000;
                 });
                 return;
             }
@@ -386,7 +463,9 @@ export default class Boss extends Enemy {
         // 正常结束动作
         this.currentState = BossState.CHASE;
         this.clearTint();
-        this.skillCooldown = 10000; // 所有动作结束后，进入 10 秒的技能发呆期
+        // 根据血量设置CD
+        const isHalfHealth = this.health > this.maxHealth / 2;
+        this.skillCooldown = isHalfHealth ? 10000 : 8000;
     }
 
     protected die() {

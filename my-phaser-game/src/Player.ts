@@ -42,6 +42,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   
   // 【核心新增：无敌帧标志】
   public isInvincible: boolean = false;
+  private isHurtInvincible: boolean = false; // 单独标记受击无敌状态
   
   // 【新增属性】
   public health: number = 3; // 玩家有 3 颗心
@@ -546,9 +547,11 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       // 1. 恢复正常状态
       this.currentState = PlayerState.IDLE;
       
-      // 2. 解除无敌帧
-      this.isInvincible = false;
-      this.setAlpha(1); // 恢复不透明
+      // 2. 解除无敌帧（只有在不在受击无敌状态时才解除）
+      if (!this.isHurtInvincible) {
+          this.isInvincible = false;
+          this.setAlpha(1); // 恢复不透明
+      }
       
       // 2. 切换回对应的spritesheet并设置默认站姿
       this.setTexture(this.hasGauntlet ? "player_new" : "player");
@@ -732,6 +735,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       this.currentState = PlayerState.HURT;
       this.isHurt = true;
       this.isInvincible = true; // 挨打后获得短暂无敌帧，防止被连续碰瓷秒杀
+      this.isHurtInvincible = true; // 标记受击无敌状态
 
       console.log(`勇者挨揍了！剩余血量: ${this.health}`);
       
@@ -767,6 +771,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
               duration: 100, // 每次 0.1 秒
               onComplete: () => {
                   this.isInvincible = false; // 1秒后，彻底解除无敌帧
+                  this.isHurtInvincible = false; // 解除受击无敌标记
                   this.setAlpha(1);
               }
           });
