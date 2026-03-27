@@ -176,7 +176,7 @@ export class Bullet extends Phaser.Physics.Arcade.Sprite {
     private startX: number = 0;
     private startY: number = 0;
     private readonly MAX_DISTANCE: number = 300;
-    private readonly SPEED: number = 250;
+    private readonly SPEED: number = 100;
     private hasHit: boolean = false;
 
     constructor(scene: Phaser.Scene, x: number, y: number, texture: string, target: Phaser.Physics.Arcade.Sprite) {
@@ -189,9 +189,9 @@ export class Bullet extends Phaser.Physics.Arcade.Sprite {
         this.startX = x;
         this.startY = y;
 
-        this.setScale(0.4);
-        this.body?.setSize(20, 20);
-        this.body?.setOffset(6, 6);
+        this.setScale(0.6);
+        this.body?.setSize(14, 14);
+        this.body?.setOffset(10, 10);
 
         const dir = new Phaser.Math.Vector2(
             this.targetPlayer.x - this.x,
