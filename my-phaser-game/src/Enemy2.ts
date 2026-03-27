@@ -11,8 +11,9 @@ export default class Enemy2 extends Phaser.Physics.Arcade.Sprite {
     private healthBar!: Phaser.GameObjects.Graphics;
     protected maxHealth: number = 3;
 
-    private attackCooldown: number = 6000;
+    private attackCooldown: number = 8000;
     private lastAttackTime: number = 0;
+    private spawnedAt: number = 0;
 
     constructor(scene: Phaser.Scene, x: number, y: number, texture: string, frame?: number) {
         super(scene, x, y, texture, frame);
@@ -41,6 +42,7 @@ export default class Enemy2 extends Phaser.Physics.Arcade.Sprite {
 
         this.createAnimations();
         this.anims.play('enemy2-idle', true);
+        this.spawnedAt = scene.time.now;
     }
 
     private createAnimations() {
@@ -144,7 +146,7 @@ export default class Enemy2 extends Phaser.Physics.Arcade.Sprite {
             this.anims.play('enemy2-idle', true);
 
             const now = this.scene.time.now;
-            if (now - this.lastAttackTime >= this.attackCooldown) {
+            if (now - this.spawnedAt >= 2000 && now - this.lastAttackTime >= this.attackCooldown) {
                 this.fireBullet();
                 this.lastAttackTime = now;
             }
@@ -187,7 +189,7 @@ export class Bullet extends Phaser.Physics.Arcade.Sprite {
         this.startX = x;
         this.startY = y;
 
-        this.setScale(0.8);
+        this.setScale(0.4);
         this.body?.setSize(20, 20);
         this.body?.setOffset(6, 6);
 
