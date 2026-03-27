@@ -190,10 +190,23 @@ export default class Boss extends Enemy {
                     this.skillCooldown -= 16; // 假设60fps，每帧减少16毫秒
                 }
 
-                // 靠近玩家且技能冷却完毕，随机释放技能
-                if (dist < 120 && this.skillCooldown <= 0) {
-                    this.startRandomSkill();
-                    return;
+                // 技能冷却完毕后的处理
+                if (this.skillCooldown <= 0) {
+                    if (dist < 120) {
+                        // 靠近玩家时，随机释放技能
+                        this.startRandomSkill();
+                        return;
+                    } else {
+                        // 追击过程中CD转好，立即释放三技能冲刺
+                        this.currentSkill = 3;
+                        this.currentState = BossState.WINDUP;
+                        console.log("启动技能三定时器，延迟200ms（追击过程中CD转好）");
+                        this.skillTimer = this.scene.time.delayedCall(200, () => {
+                            console.log("技能三定时器触发，调用executeSkill3（追击过程中CD转好）");
+                            this.executeSkill3();
+                        });
+                        return;
+                    }
                 }
 
                 // 寻路与镜像反转
