@@ -611,7 +611,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       this.anims.play({ key: animKey, frameRate: 15 }, true);
       
       if (this.comboCount === 3) {
-          attackDuration = 600; // 第三拳后摇极大，耗时 0.6 秒！
+          attackDuration = 500; // 第三拳后摇极大，耗时 0.6 秒！
       }
 
       // 5. 【核心】：生成攻击判定区 (Hitbox)

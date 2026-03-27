@@ -112,6 +112,9 @@ export default class GameScene extends Phaser.Scene {
       frameWidth: 32,
       frameHeight: 32,
     });
+    
+    // 加载粒子纹理
+    this.load.image("smoke", "assets/particle.png");
   }
 
   create() {

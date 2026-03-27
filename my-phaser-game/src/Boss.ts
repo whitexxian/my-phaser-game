@@ -33,6 +33,8 @@ export default class Boss extends Enemy {
     private hasPhaseTransitioned: boolean = false; // 标记是否已经转阶段
     private isPhaseTransitionInvincible: boolean = false; // 标记是否在转阶段无敌状态
     private clearTintTimer: Phaser.Time.TimerEvent | null = null; // 用于清除tint的定时器
+    private windupPlayerPosition: Phaser.Math.Vector2 | null = null; // 记录前摇开始时的玩家位置
+    private isExecutedThisStagger: boolean = false; // 标记当前虚弱期间是否已被处决
 
     constructor(scene: Phaser.Scene, x: number, y: number, texture: string) {
         // 指定使用第一个帧（帧索引0），避免显示整个精灵图
@@ -190,11 +192,13 @@ export default class Boss extends Enemy {
     // ==========================================
     public execute() {
         if (this.currentState !== BossState.STAGGERED || this.health <= 0) return;
+        if (this.isExecutedThisStagger) return; // 防止当前虚弱期间多次处决
         
         console.log("【致命处决】 扣除 5 点真实伤害！");
         this.scene.cameras.main.flash(200, 255, 0, 0); // 屏幕红光一闪
         this.scene.cameras.main.shake(100, 0.003); // 微小震动效果
         
+        this.isExecutedThisStagger = true; // 标记当前虚弱期间已被处决
         this.health -= 5;
         if (this.health <= 0) {
             this.die();
@@ -215,6 +219,7 @@ export default class Boss extends Enemy {
     private triggerStagger() {
         console.log("Boss 防御被击破！陷入虚弱！");
         this.currentState = BossState.STAGGERED;
+        this.isExecutedThisStagger = false; // 重置处决标记，允许新的处决
         
         // 1. 立即打断当前的任何定时器动作！
         if (this.skillTimer) this.skillTimer.remove();
@@ -256,6 +261,15 @@ export default class Boss extends Enemy {
         // --- 以下是 CHASE (追击) 状态的逻辑 ---
         // SKILL_3状态下不执行CHASE逻辑，避免中断冲刺动画
         if (this.currentState === BossState.CHASE) {
+            // 设置追击形态的判定框
+            this.body?.setSize(20, 28); // 追击形态：宽度24，高度28
+            // 根据镜像状态设置偏移，确保判定框始终在Boss前方
+            if (this.flipX) {
+                this.body?.setOffset(8, 2); // 向右移动时的偏移（前方在右侧）
+            } else {
+                this.body?.setOffset(4, 2); // 向左移动时的偏移（前方在左侧）
+            }
+            
             const dist = Phaser.Math.Distance.Between(this.x, this.y, this.targetPlayer.x, this.targetPlayer.y);
             
             // 只有在仇恨范围内才移动和攻击
@@ -273,10 +287,19 @@ export default class Boss extends Enemy {
                         return;
                     } else {
                         // 追击过程中CD转好，立即释放三技能冲刺
+                        // 恢复原来的判定框（技能形态使用）
+                        this.body?.setSize(32, 32); // 技能形态：宽度32，高度32
+                        this.body?.setOffset(0, 0);
+                        
+                        // 记录前摇开始时的玩家位置
+                        if (this.targetPlayer) {
+                            this.windupPlayerPosition = new Phaser.Math.Vector2(this.targetPlayer.x, this.targetPlayer.y);
+                        }
+                        
                         this.currentSkill = 3;
                         this.currentState = BossState.WINDUP;
-                        console.log("启动技能三定时器，延迟200ms（追击过程中CD转好）");
-                        this.skillTimer = this.scene.time.delayedCall(200, () => {
+                        console.log("启动技能三定时器，延迟600ms（追击过程中CD转好）");
+                        this.skillTimer = this.scene.time.delayedCall(600, () => {
                             console.log("技能三定时器触发，调用executeSkill3（追击过程中CD转好）");
                             this.executeSkill3();
                         });
@@ -302,6 +325,15 @@ export default class Boss extends Enemy {
     }
 
     private startRandomSkill() {
+        // 恢复原来的判定框（前摇和技能形态使用）
+        this.body?.setSize(32, 32); // 前摇和技能形态：宽度32，高度32
+        this.body?.setOffset(0, 0);
+        
+        // 记录前摇开始时的玩家位置
+        if (this.targetPlayer) {
+            this.windupPlayerPosition = new Phaser.Math.Vector2(this.targetPlayer.x, this.targetPlayer.y);
+        }
+        
         this.currentState = BossState.WINDUP;
         this.anims.play('boss-windup', true);
         
@@ -346,9 +378,9 @@ export default class Boss extends Enemy {
                 this.executeSkill2();
             });
         } else {
-            // 技能 3：前摇 0.2秒 -> 冲刺 0.8秒
-            console.log("启动技能三定时器，延迟200ms");
-            this.skillTimer = this.scene.time.delayedCall(200, () => {
+            // 技能 3：前摇 0.4秒 -> 冲刺 0.8秒
+            console.log("启动技能三定时器，延迟600ms");
+            this.skillTimer = this.scene.time.delayedCall(600, () => {
                 console.log("技能三定时器触发，调用executeSkill3");
                 this.executeSkill3();
             });
@@ -366,9 +398,25 @@ export default class Boss extends Enemy {
         const aoe = this.scene.add.circle(this.x, this.y, 60);
         this.scene.physics.add.existing(aoe);
         this.scene.events.emit('boss-aoe', aoe, 1.0); // 发射给主场景去判定玩家掉血
-
+        
+        // 添加攻击范围特效：烟雾爆炸效果
+        const particles = this.scene.add.particles(0, 0, 'smoke', {
+            x: this.x,
+            y: this.y,
+            speed: { min: 50, max: 100 },
+            angle: { min: 0, max: 360 },
+            scale: { start: 0.5, end: 1.5 },
+            alpha: { start: 0.8, end: 0 },
+            blendMode: 'NORMAL',
+            lifespan: 500,
+            quantity: 30,
+            gravityY: -80,
+            maxParticles: 30
+        });
+        
         this.scene.time.delayedCall(500, () => {
             aoe.destroy();
+            particles.destroy();
             this.endAction();
         });
     }
@@ -401,9 +449,9 @@ export default class Boss extends Enemy {
         this.anims.play('boss-skill3', true);
         console.log(`播放动画后的当前动画: ${this.anims.currentAnim?.key}`);
 
-        // 计算向玩家方向的冲刺方向
-        if (this.targetPlayer) {
-            const dir = new Phaser.Math.Vector2(this.targetPlayer.x - this.x, this.targetPlayer.y - this.y).normalize();
+        // 计算向前摇开始时玩家方向的冲刺方向
+        if (this.windupPlayerPosition) {
+            const dir = new Phaser.Math.Vector2(this.windupPlayerPosition.x - this.x, this.windupPlayerPosition.y - this.y).normalize();
             
             // 设置冲刺速度
             this.setVelocity(dir.x * 300, dir.y * 300);
@@ -447,8 +495,24 @@ export default class Boss extends Enemy {
                 this.scene.physics.add.existing(aoe);
                 this.scene.events.emit('boss-aoe', aoe, 1.0);
                 
+                // 添加攻击范围特效：烟雾爆炸效果
+                const particles = this.scene.add.particles(0, 0, 'smoke', {
+                    x: this.x,
+                    y: this.y,
+                    speed: { min: 50, max: 100 },
+                    angle: { min: 0, max: 360 },
+                    scale: { start: 0.5, end: 1.5 },
+                    alpha: { start: 0.8, end: 0 },
+                    blendMode: 'NORMAL',
+                    lifespan: 500,
+                    quantity: 30,
+                    gravityY: -80,
+                    maxParticles: 30
+                });
+                
                 this.scene.time.delayedCall(500, () => {
                     aoe.destroy();
+                    particles.destroy();
                     // 从额外释放的技能一开始计算冷却
                     this.currentState = BossState.CHASE;
                     this.clearTint();
@@ -480,13 +544,11 @@ export default class Boss extends Enemy {
         (this as any).bleedStacks = 0;
         (this as any).bleedStartTimes = [];
         
-        // 立即更新UI，确保流血图标消失
-        this.scene.game.events.emit('update-boss-bleed', 0);
-        
-        // 关闭血条
-        this.hideHealthBar();
         // 设置为非活跃状态，防止update方法再次显示血条
         this.setActive(false);
+        
+        // 关闭血条（会同时清除流血图标）
+        this.hideHealthBar();
         
         // 更新全局状态中的死亡记录
         if (this.monsterId) {
