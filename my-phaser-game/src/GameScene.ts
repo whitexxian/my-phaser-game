@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import Player from "./Player";
 import Enemy from "./Enemy";
+import Enemy2 from "./Enemy2";
 import Boss from "./Boss";
 
 export default class GameScene extends Phaser.Scene {
@@ -94,9 +95,21 @@ export default class GameScene extends Phaser.Scene {
       frameWidth: 32,
       frameHeight: 32,
     });
-    
+
+    // 4.1 加载远程攻击小怪图像
+    this.load.spritesheet("enemy2", "assets/enemy2.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
     // 5. 加载Boss图像（2列7行，每个32x32）
     this.load.spritesheet("enemy1", "assets/enemy1.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    // 加载子弹图像
+    this.load.spritesheet("bullet", "assets/bullet.png", {
       frameWidth: 32,
       frameHeight: 32,
     });
@@ -450,12 +463,13 @@ export default class GameScene extends Phaser.Scene {
         this.events.removeAllListeners('boss-summon');
         this.events.on('boss-summon', (bx: number, by: number) => {
             console.log("Boss 召唤了小怪！");
-            // 在 Boss 身边刷两只普通 Enemy
-            for(let i=-1; i<=1; i+=2) {
-                const slime = new Enemy(this, bx + i*40, by + 40, "enemy0");
-                slime.setTarget(this.player);
-                this.enemies.add(slime);
-            }
+            const slime1 = new Enemy(this, bx - 40, by + 40, "enemy0");
+            slime1.setTarget(this.player);
+            this.enemies.add(slime1);
+
+            const ranged = new Enemy2(this, bx + 40, by + 40, "enemy2");
+            ranged.setTarget(this.player);
+            this.enemies.add(ranged);
         });
         
         // ==========================================
