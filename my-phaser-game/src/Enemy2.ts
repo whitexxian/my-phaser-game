@@ -11,7 +11,7 @@ export default class Enemy2 extends Phaser.Physics.Arcade.Sprite {
     private healthBar!: Phaser.GameObjects.Graphics;
     protected maxHealth: number = 3;
 
-    private attackCooldown: number = 8000;
+    private attackCooldown: number = 6000;
     private lastAttackTime: number = 0;
     private spawnedAt: number = 0;
 
@@ -176,7 +176,7 @@ export class Bullet extends Phaser.Physics.Arcade.Sprite {
     private startX: number = 0;
     private startY: number = 0;
     private readonly MAX_DISTANCE: number = 300;
-    private readonly SPEED: number = 100;
+    private readonly SPEED: number = 200;
     private hasHit: boolean = false;
 
     constructor(scene: Phaser.Scene, x: number, y: number, texture: string, target: Phaser.Physics.Arcade.Sprite) {
