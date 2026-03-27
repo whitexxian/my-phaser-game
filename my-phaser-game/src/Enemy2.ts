@@ -11,7 +11,7 @@ export default class Enemy2 extends Phaser.Physics.Arcade.Sprite {
     private healthBar!: Phaser.GameObjects.Graphics;
     protected maxHealth: number = 3;
 
-    private attackCooldown: number = 2000;
+    private attackCooldown: number = 6000;
     private lastAttackTime: number = 0;
 
     constructor(scene: Phaser.Scene, x: number, y: number, texture: string, frame?: number) {
@@ -214,7 +214,7 @@ export class Bullet extends Phaser.Physics.Arcade.Sprite {
         const player = this.targetPlayer as Player;
         if (player && typeof player.takeDamage === 'function') {
             const dir = new Phaser.Math.Vector2(this.targetPlayer.x - this.x, this.targetPlayer.y - this.y).normalize();
-            player.takeDamage(1, dir.x, dir.y);
+            player.takeDamage(0.5, dir.x, dir.y);
         }
 
         this.setVelocity(0, 0);
