@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import Player from "./Player";
-import { BGMManager } from "./GameScene";
+import { BGMManager } from "./BGMManager";
 
 export default class TwoFloorScene extends Phaser.Scene {
   private player!: Player;
@@ -16,7 +16,7 @@ export default class TwoFloorScene extends Phaser.Scene {
     D: Phaser.Input.Keyboard.Key;
   };
   private isFlyFlipped: boolean = false;
-  private bgmManager!: BGMManager;
+  private bgmManager: BGMManager = BGMManager.getInstance();
 
   constructor() {
     super("TwoFloorScene");
@@ -269,9 +269,11 @@ export default class TwoFloorScene extends Phaser.Scene {
     this.scene.launch("UIScene");
     
     // ==========================================
-    // 【核心新增：初始化BGM管理器】
+    // 【核心新增：初始化BGM管理器 - 使用全局单例】
     // ==========================================
-    this.bgmManager = new BGMManager(this);
+    // 设置当前场景，清除敌人引用（TwoFloorScene没有敌人）
+    this.bgmManager.setScene(this);
+    this.bgmManager.clearEnemies();
     // TwoFloorScene没有敌人，直接播放平时音乐
     this.bgmManager.startNormalBGM();
 

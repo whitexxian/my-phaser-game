@@ -3,6 +3,7 @@ import Player from "./Player";
 import Enemy from "./Enemy";
 import Enemy2 from "./Enemy2";
 import Boss from "./Boss";
+import { BGMManager } from "./BGMManager";
 
 export default class GameScene extends Phaser.Scene {
   private player!: Player;
@@ -49,9 +50,9 @@ export default class GameScene extends Phaser.Scene {
   private openedChests: Set<string> = new Set();
   
   // ==========================================
-  // 【核心新增：BGM管理系统】
+  // 【核心新增：BGM管理系统 - 使用全局单例】
   // ==========================================
-  private bgmManager!: BGMManager;
+  private bgmManager: BGMManager = BGMManager.getInstance();
   private isPlayerDead: boolean = false; // 玩家是否死亡，用于停止BGM更新
 
 
@@ -667,21 +668,19 @@ export default class GameScene extends Phaser.Scene {
     this.scene.launch("UIScene");
     
     // ==========================================
-    // 【核心新增：初始化BGM管理器】
+    // 【核心新增：初始化BGM管理器 - 使用全局单例】
     // ==========================================
-    this.bgmManager = new BGMManager(this);
-    // 设置敌人组引用
+    // 设置当前场景和敌人引用
+    this.bgmManager.setScene(this);
     this.bgmManager.setEnemies(this.enemies, this.bossesGroup);
-    // 直接开始播放平时音乐（死亡时已经停止，这里重新开始）
+    // 直接开始播放平时音乐
     this.bgmManager.startNormalBGM();
     
     // 监听停止BGM事件（玩家死亡时）
     this.game.events.on("stop-bgm", () => {
       console.log('[GameScene] 收到停止BGM事件，停止BGM更新');
       this.isPlayerDead = true; // 标记玩家死亡，停止BGM更新
-      if (this.bgmManager) {
-        this.bgmManager.stop();
-      }
+      this.bgmManager.stop();
     });
     
     // 初始化键盘输入
@@ -864,7 +863,7 @@ export default class GameScene extends Phaser.Scene {
     // 【核心新增：更新BGM状态（基于Boss距离）】
     // 玩家死亡后不再更新BGM
     // ==========================================
-    if (this.bgmManager && !this.isPlayerDead) {
+    if (!this.isPlayerDead) {
         this.bgmManager.update();
     }
 
@@ -1173,195 +1172,5 @@ export default class GameScene extends Phaser.Scene {
     // 恢复原碰撞框大小
     this.player.body?.setSize(16, 20);
     this.player.body?.setOffset(8, 9);
-  }
-}
-
-// ==========================================
-// 【核心新增：BGM管理器 - 基于敌人追踪状态】
-// ==========================================
-export class BGMManager {
-  private scene: Phaser.Scene;
-  private currentMusic: Phaser.Sound.BaseSound | null = null;
-  private isCombat: boolean = false;
-  private normalTracks: string[] = ['normal1', 'normal2'];
-  private combatTracks: string[] = ['fight1', 'fight2'];
-  private currentNormalIndex: number = 0;
-  private currentCombatIndex: number = 0;
-  private isPlaying: boolean = false;
-  
-  // 敌人组引用
-  private enemies: Phaser.Physics.Arcade.Group | null = null;
-  private bossesGroup: Phaser.Physics.Arcade.Group | null = null;
-
-  constructor(scene: Phaser.Scene) {
-    this.scene = scene;
-  }
-
-  // 设置敌人组引用
-  public setEnemies(enemies: Phaser.Physics.Arcade.Group, bossesGroup: Phaser.Physics.Arcade.Group) {
-    this.enemies = enemies;
-    this.bossesGroup = bossesGroup;
-  }
-
-  // 更新BGM状态（每帧调用）
-  public update() {
-    const isAnyEnemyChasing = this.checkIfAnyEnemyChasing();
-    
-    if (isAnyEnemyChasing) {
-      // 有敌人在追踪，切换到战斗音乐
-      if (!this.isCombat) {
-        this.switchToCombat();
-      }
-    } else {
-      // 没有敌人追踪，切换到平时音乐
-      if (this.isCombat) {
-        this.switchToNormal();
-      } else if (!this.isPlaying) {
-        // 没有在播放音乐时，开始播放平时音乐
-        this.playNextNormalTrack();
-      }
-    }
-  }
-
-  // 检查是否有任何敌人在追踪玩家
-  private checkIfAnyEnemyChasing(): boolean {
-    // 检查普通敌人
-    if (this.enemies) {
-      const enemyList = this.enemies.getChildren() as any[];
-      for (const enemy of enemyList) {
-        if (enemy.active && !enemy.isDead && this.isEnemyChasing(enemy)) {
-          return true;
-        }
-      }
-    }
-
-    // 检查Boss
-    if (this.bossesGroup) {
-      const bossList = this.bossesGroup.getChildren() as any[];
-      for (const boss of bossList) {
-        if (boss.active && boss.currentState !== 'DEAD' && this.isBossChasing(boss)) {
-          return true;
-        }
-      }
-    }
-
-    return false;
-  }
-
-  // 检查普通敌人是否在追踪玩家（在仇恨范围内）
-  private isEnemyChasing(enemy: any): boolean {
-    if (!enemy.targetPlayer) return false;
-    
-    const distance = Phaser.Math.Distance.Between(
-      enemy.x, enemy.y,
-      enemy.targetPlayer.x, enemy.targetPlayer.y
-    );
-    
-    // 敌人在仇恨范围内且没有死亡/受伤
-    return distance <= enemy.aggroRange;
-  }
-
-  // 检查Boss是否在追踪玩家
-  private isBossChasing(boss: any): boolean {
-    if (!boss.targetPlayer) return false;
-    
-    const distance = Phaser.Math.Distance.Between(
-      boss.x, boss.y,
-      boss.targetPlayer.x, boss.targetPlayer.y
-    );
-    
-    // Boss在仇恨范围内
-    return distance <= boss.aggroRange;
-  }
-
-  // 切换到平时BGM
-  private switchToNormal() {
-    console.log('[BGM] 切换到平时音乐');
-    this.isCombat = false;
-    this.stopCurrentMusic();
-    this.playNextNormalTrack();
-  }
-
-  // 切换到战斗BGM
-  private switchToCombat() {
-    console.log('[BGM] 切换到战斗音乐');
-    this.isCombat = true;
-    this.stopCurrentMusic();
-    this.playNextCombatTrack();
-  }
-
-  // 开始播放平时BGM（外部调用）
-  public startNormalBGM() {
-    if (this.isCombat || !this.isPlaying) {
-      this.switchToNormal();
-    }
-  }
-
-  // 停止当前音乐
-  private stopCurrentMusic() {
-    if (this.currentMusic) {
-      // 移除所有事件监听器，防止回调触发
-      this.currentMusic.removeAllListeners();
-      this.currentMusic.stop();
-      this.currentMusic.destroy();
-      this.currentMusic = null;
-    }
-    this.isPlaying = false;
-  }
-
-  // 播放下一首平时音乐
-  private playNextNormalTrack() {
-    const trackKey = this.normalTracks[this.currentNormalIndex];
-    this.currentNormalIndex = (this.currentNormalIndex + 1) % this.normalTracks.length;
-    console.log(`[BGM] 准备播放平时音乐: ${trackKey}`);
-    this.playTrack(trackKey, () => {
-      // 只有在仍然是平时状态时才继续播放下一首
-      if (!this.isCombat) {
-        this.playNextNormalTrack();
-      }
-    });
-  }
-
-  // 播放下一首战斗音乐
-  private playNextCombatTrack() {
-    const trackKey = this.combatTracks[this.currentCombatIndex];
-    this.currentCombatIndex = (this.currentCombatIndex + 1) % this.combatTracks.length;
-    console.log(`[BGM] 准备播放战斗音乐: ${trackKey}`);
-    this.playTrack(trackKey, () => {
-      // 只有在仍然是战斗状态时才继续播放下一首
-      if (this.isCombat) {
-        this.playNextCombatTrack();
-      }
-    });
-  }
-
-  // 播放指定音乐
-  private playTrack(key: string, onComplete: () => void) {
-    // 确保先停止当前音乐
-    this.stopCurrentMusic();
-    
-    this.currentMusic = this.scene.sound.add(key, {
-      volume: 0.5,
-      loop: false
-    });
-
-    this.currentMusic.once('complete', onComplete);
-    this.currentMusic.play();
-    this.isPlaying = true;
-    console.log(`[BGM] 开始播放: ${key} (${this.isCombat ? '战斗' : '平时'})`);
-  }
-
-  // 停止所有音乐
-  public stop() {
-    this.stopCurrentMusic();
-    this.isCombat = false;
-  }
-
-  // 强制重置为平时音乐（用于复活时）
-  public forceResetToNormal() {
-    console.log('[BGM] 强制重置为平时音乐');
-    this.isCombat = false;
-    this.stopCurrentMusic();
-    this.playNextNormalTrack();
   }
 }
