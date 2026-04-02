@@ -47,6 +47,11 @@ export default class GameScene extends Phaser.Scene {
   private isFlyFlipped: boolean = false;
   // 记录已经开过的宝箱
   private openedChests: Set<string> = new Set();
+  
+  // ==========================================
+  // 【核心新增：BGM管理系统】
+  // ==========================================
+  private bgmManager!: BGMManager;
 
 
   constructor() {
@@ -128,6 +133,14 @@ export default class GameScene extends Phaser.Scene {
     
     // 加载粒子纹理
     this.load.image("smoke", "assets/particle.png");
+    
+    // ==========================================
+    // 【核心新增：加载BGM音频】
+    // ==========================================
+    this.load.audio("normal1", "assets/audio/normal1.mp3");
+    this.load.audio("normal2", "assets/audio/normal2.mp3");
+    this.load.audio("fight1", "assets/audio/fight1.mp3");
+    this.load.audio("fight2", "assets/audio/fight2.mp3");
   }
 
   create() {
@@ -644,6 +657,14 @@ export default class GameScene extends Phaser.Scene {
 
     this.scene.launch("UIScene");
     
+    // ==========================================
+    // 【核心新增：初始化BGM管理器】
+    // ==========================================
+    this.bgmManager = new BGMManager(this);
+    // 设置敌人组引用
+    this.bgmManager.setEnemies(this.enemies, this.bossesGroup);
+    this.bgmManager.startNormalBGM();
+    
     // 初始化键盘输入
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = this.input.keyboard!.addKeys("W,A,S,D") as any;
@@ -717,6 +738,13 @@ export default class GameScene extends Phaser.Scene {
   // 场景关闭时清理资源，避免重复添加
   shutdown() {
     console.log("GameScene关闭，开始清理资源");
+    
+    // ==========================================
+    // 【核心新增：停止BGM】
+    // ==========================================
+    if (this.bgmManager) {
+      this.bgmManager.stop();
+    }
     
     // 清理事件监听器
     console.log("清理事件监听器");
@@ -812,6 +840,13 @@ export default class GameScene extends Phaser.Scene {
 
   update() {
     if (!this.player) return;
+
+    // ==========================================
+    // 【核心新增：更新BGM状态（基于Boss距离）】
+    // ==========================================
+    if (this.bgmManager) {
+        this.bgmManager.update();
+    }
 
     // 在每帧开始时重置交互区域
     this.activeInteractZone = "";
@@ -909,30 +944,59 @@ export default class GameScene extends Phaser.Scene {
             }
 
             if (this.activeInteractZone === 'chest_hp') {
-                this.player.maxHealth++;
-                this.player.health = this.player.maxHealth; // 升级血量同时回满血
-                // 发送新的事件，直接传递新的最大值和当前值
-                this.game.events.emit('update-max-health', this.player.maxHealth, this.player.health);
+                // 使用新的简化道具获得展示系统
+                this.game.events.emit('show-item-get-ui', {
+                    playerTexture: this.player.getPlayerTexture(),
+                    itemTexture: 'item_hp',
+                    name: '苹果种子',
+                    description: '一颗苹果的种子，蕴含着澎湃坚韧的灵魂能量。\n提升生命上限，并且回满生命值。',
+                    onClose: () => {
+                        // UI关闭后应用效果
+                        this.player.maxHealth++;
+                        this.player.health = this.player.maxHealth;
+                        this.game.events.emit('update-max-health', this.player.maxHealth, this.player.health);
+                    }
+                });
             }
             else if (this.activeInteractZone === 'chest_gauntlet') {
-                console.log("获得【破岩拳套】！翻滚后可直接派生重击！");
-                this.player.upgradeToGauntlet();
+                // 使用新的简化道具获得展示系统
+                this.game.events.emit('show-item-get-ui', {
+                    playerTexture: this.player.getPlayerTexture(),
+                    itemTexture: 'item_gauntlet',
+                    name: '老皮革拳套',
+                    description: '一副饱经风霜的制式皮革拳套，原主人把他保养的很好。\n翻滚后可直接派生第三段攻击。\n"岩石亦可碎，何况敌骨。"',
+                    onClose: () => {
+                        // UI关闭后应用效果
+                        console.log("获得【老皮革拳套】！翻滚后可直接派生重击！");
+                        this.player.upgradeToGauntlet();
+                    }
+                });
             }
             else if (this.activeInteractZone === 'chest_fly') {
-                console.log("获得【嗜血魔蝇】！重击附带叠层流血与吸血！");
-                this.player.hasFly = true;
-                // 生成苍蝇宠物实体
-                this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);
-                // 苍蝇动画（2x4网格，8帧）
-                this.anims.create({
-                    key: 'fly-flap',
-                    frames: this.anims.generateFrameNumbers('fly', { start: 0, end: 7 }),
-                    frameRate: 10,
-                    repeat: -1
+                // 使用新的简化道具获得展示系统
+                this.game.events.emit('show-item-get-ui', {
+                    playerTexture: this.player.getPlayerTexture(),
+                    itemTexture: 'item_fly',
+                    name: '襁褓苍蝇',
+                    description: '教宗巴德万拼死保护的襁褓苍蝇。\n跟随玩家，在第三段攻击命中后，将叠加流血与吸血效果。\n"火之将熄，然位不见王影。"',
+                    onClose: () => {
+                        // UI关闭后应用效果
+                        console.log("获得【襁褓苍蝇】！重击附带叠层流血与吸血！");
+                        this.player.hasFly = true;
+                        // 生成苍蝇宠物实体
+                        this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);
+                        // 苍蝇动画（2x4网格，8帧）
+                        this.anims.create({
+                            key: 'fly-flap',
+                            frames: this.anims.generateFrameNumbers('fly', { start: 0, end: 7 }),
+                            frameRate: 10,
+                            repeat: -1
+                        });
+                        this.flyPet.anims.play('fly-flap', true);
+                        // 设置图层深度高于玩家
+                        this.flyPet.setDepth(10);
+                    }
                 });
-                this.flyPet.anims.play('fly-flap', true);
-                // 设置图层深度高于玩家
-                this.flyPet.setDepth(10);
             }
         }
         else if (this.activeInteractZone === 'zone_locked') {
@@ -1089,5 +1153,187 @@ export default class GameScene extends Phaser.Scene {
     // 恢复原碰撞框大小
     this.player.body?.setSize(16, 20);
     this.player.body?.setOffset(8, 9);
+  }
+}
+
+// ==========================================
+// 【核心新增：BGM管理器 - 基于敌人追踪状态】
+// ==========================================
+class BGMManager {
+  private scene: Phaser.Scene;
+  private currentMusic: Phaser.Sound.BaseSound | null = null;
+  private isCombat: boolean = false;
+  private normalTracks: string[] = ['normal1', 'normal2'];
+  private combatTracks: string[] = ['fight1', 'fight2'];
+  private currentNormalIndex: number = 0;
+  private currentCombatIndex: number = 0;
+  private isPlaying: boolean = false;
+  
+  // 敌人组引用
+  private enemies: Phaser.Physics.Arcade.Group | null = null;
+  private bossesGroup: Phaser.Physics.Arcade.Group | null = null;
+
+  constructor(scene: Phaser.Scene) {
+    this.scene = scene;
+  }
+
+  // 设置敌人组引用
+  public setEnemies(enemies: Phaser.Physics.Arcade.Group, bossesGroup: Phaser.Physics.Arcade.Group) {
+    this.enemies = enemies;
+    this.bossesGroup = bossesGroup;
+  }
+
+  // 更新BGM状态（每帧调用）
+  public update() {
+    const isAnyEnemyChasing = this.checkIfAnyEnemyChasing();
+    
+    if (isAnyEnemyChasing) {
+      // 有敌人在追踪，切换到战斗音乐
+      if (!this.isCombat) {
+        this.switchToCombat();
+      }
+    } else {
+      // 没有敌人追踪，切换到平时音乐
+      if (this.isCombat) {
+        this.switchToNormal();
+      } else if (!this.isPlaying) {
+        // 没有在播放音乐时，开始播放平时音乐
+        this.playNextNormalTrack();
+      }
+    }
+  }
+
+  // 检查是否有任何敌人在追踪玩家
+  private checkIfAnyEnemyChasing(): boolean {
+    // 检查普通敌人
+    if (this.enemies) {
+      const enemyList = this.enemies.getChildren() as any[];
+      for (const enemy of enemyList) {
+        if (enemy.active && !enemy.isDead && this.isEnemyChasing(enemy)) {
+          return true;
+        }
+      }
+    }
+
+    // 检查Boss
+    if (this.bossesGroup) {
+      const bossList = this.bossesGroup.getChildren() as any[];
+      for (const boss of bossList) {
+        if (boss.active && boss.currentState !== 'DEAD' && this.isBossChasing(boss)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  // 检查普通敌人是否在追踪玩家（在仇恨范围内）
+  private isEnemyChasing(enemy: any): boolean {
+    if (!enemy.targetPlayer) return false;
+    
+    const distance = Phaser.Math.Distance.Between(
+      enemy.x, enemy.y,
+      enemy.targetPlayer.x, enemy.targetPlayer.y
+    );
+    
+    // 敌人在仇恨范围内且没有死亡/受伤
+    return distance <= enemy.aggroRange;
+  }
+
+  // 检查Boss是否在追踪玩家
+  private isBossChasing(boss: any): boolean {
+    if (!boss.targetPlayer) return false;
+    
+    const distance = Phaser.Math.Distance.Between(
+      boss.x, boss.y,
+      boss.targetPlayer.x, boss.targetPlayer.y
+    );
+    
+    // Boss在仇恨范围内
+    return distance <= boss.aggroRange;
+  }
+
+  // 切换到平时BGM
+  private switchToNormal() {
+    console.log('[BGM] 切换到平时音乐');
+    this.isCombat = false;
+    this.stopCurrentMusic();
+    this.playNextNormalTrack();
+  }
+
+  // 切换到战斗BGM
+  private switchToCombat() {
+    console.log('[BGM] 切换到战斗音乐');
+    this.isCombat = true;
+    this.stopCurrentMusic();
+    this.playNextCombatTrack();
+  }
+
+  // 开始播放平时BGM（外部调用）
+  public startNormalBGM() {
+    if (this.isCombat || !this.isPlaying) {
+      this.switchToNormal();
+    }
+  }
+
+  // 停止当前音乐
+  private stopCurrentMusic() {
+    if (this.currentMusic) {
+      // 移除所有事件监听器，防止回调触发
+      this.currentMusic.removeAllListeners();
+      this.currentMusic.stop();
+      this.currentMusic.destroy();
+      this.currentMusic = null;
+    }
+    this.isPlaying = false;
+  }
+
+  // 播放下一首平时音乐
+  private playNextNormalTrack() {
+    const trackKey = this.normalTracks[this.currentNormalIndex];
+    this.currentNormalIndex = (this.currentNormalIndex + 1) % this.normalTracks.length;
+    console.log(`[BGM] 准备播放平时音乐: ${trackKey}`);
+    this.playTrack(trackKey, () => {
+      // 只有在仍然是平时状态时才继续播放下一首
+      if (!this.isCombat) {
+        this.playNextNormalTrack();
+      }
+    });
+  }
+
+  // 播放下一首战斗音乐
+  private playNextCombatTrack() {
+    const trackKey = this.combatTracks[this.currentCombatIndex];
+    this.currentCombatIndex = (this.currentCombatIndex + 1) % this.combatTracks.length;
+    console.log(`[BGM] 准备播放战斗音乐: ${trackKey}`);
+    this.playTrack(trackKey, () => {
+      // 只有在仍然是战斗状态时才继续播放下一首
+      if (this.isCombat) {
+        this.playNextCombatTrack();
+      }
+    });
+  }
+
+  // 播放指定音乐
+  private playTrack(key: string, onComplete: () => void) {
+    // 确保先停止当前音乐
+    this.stopCurrentMusic();
+    
+    this.currentMusic = this.scene.sound.add(key, {
+      volume: 0.5,
+      loop: false
+    });
+
+    this.currentMusic.once('complete', onComplete);
+    this.currentMusic.play();
+    this.isPlaying = true;
+    console.log(`[BGM] 开始播放: ${key} (${this.isCombat ? '战斗' : '平时'})`);
+  }
+
+  // 停止所有音乐
+  public stop() {
+    this.stopCurrentMusic();
+    this.isCombat = false;
   }
 }

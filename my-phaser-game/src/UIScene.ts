@@ -69,7 +69,10 @@ export default class UIScene extends Phaser.Scene {
     
     // 监听提示消息事件
     this.game.events.on("show-message", this.showMessage, this);
-    
+
+    // 【新增】：监听道具获得UI事件
+    this.game.events.on("show-item-get-ui", this.showItemGetUI, this);
+
     // 创建提示消息文本
     this.messageText = this.add.text(
       this.cameras.main.width / 2,
@@ -251,5 +254,140 @@ export default class UIScene extends Phaser.Scene {
         this.messageText.alpha = 0;
       }
     });
+  }
+
+  // ==========================================
+  // 【核心新增：道具获得展示系统 - 简化版】
+  // ==========================================
+  private itemGetContainer: Phaser.GameObjects.Container | null = null;
+  private itemGetBg: Phaser.GameObjects.Rectangle | null = null;
+  private isItemUIShowing: boolean = false;
+  private escKey: Phaser.Input.Keyboard.Key | null = null;
+  private onUICloseCallback: (() => void) | null = null;
+
+  // 显示道具获得UI - 简化版
+  private showItemGetUI(data: { 
+    playerTexture: string;
+    itemTexture: string; 
+    name: string; 
+    description: string;
+    onClose?: () => void;
+  }) {
+    if (this.isItemUIShowing) return;
+    this.isItemUIShowing = true;
+    this.onUICloseCallback = data.onClose || null;
+
+    const centerX = this.cameras.main.width / 2;
+    const centerY = this.cameras.main.height / 2;
+
+    // 创建全屏黑色背景
+    this.itemGetBg = this.add.rectangle(
+      centerX, centerY,
+      this.cameras.main.width,
+      this.cameras.main.height,
+      0x000000, 0.85
+    );
+    this.itemGetBg.setScrollFactor(0);
+    this.itemGetBg.setDepth(10000);
+
+    // 创建容器
+    this.itemGetContainer = this.add.container(centerX, centerY);
+    this.itemGetContainer.setScrollFactor(0);
+    this.itemGetContainer.setDepth(10001);
+
+    // 1. 创建玩家获得道具的动画（使用 player_getitem.png）
+    const playerSprite = this.add.sprite(0, -40, 'player_getitem');
+    playerSprite.setScale(6);
+    
+    // 2. 创建道具图标（在玩家头顶）
+    const itemIcon = this.add.sprite(0, -160, data.itemTexture);
+    itemIcon.setScale(4);
+
+    // 3. 创建道具名称
+    const nameText = this.add.text(0, 60, data.name, {
+      fontSize: '36px',
+      fontFamily: 'Arial',
+      color: '#ffd700',
+      align: 'center',
+      stroke: '#000000',
+      strokeThickness: 4
+    });
+    nameText.setOrigin(0.5);
+
+    // 4. 创建道具描述
+    const descText = this.add.text(0, 130, data.description, {
+      fontSize: '18px',
+      fontFamily: 'Arial',
+      color: '#ffffff',
+      align: 'center',
+      wordWrap: { width: 450 },
+      lineSpacing: 8
+    });
+    descText.setOrigin(0.5);
+
+    // 5. 创建退出提示
+    const exitText = this.add.text(0, 200, '按 [Esc] 关闭', {
+      fontSize: '16px',
+      fontFamily: 'Arial',
+      color: '#888888',
+      align: 'center'
+    });
+    exitText.setOrigin(0.5);
+
+    // 添加到容器
+    this.itemGetContainer.add([playerSprite, itemIcon, nameText, descText, exitText]);
+
+    // 给道具图标添加浮动动画
+    this.tweens.add({
+      targets: itemIcon,
+      y: '-=8',
+      duration: 1000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    // 给退出提示添加闪烁动画
+    this.tweens.add({
+      targets: exitText,
+      alpha: 0.4,
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    // 监听 Esc 键关闭
+    this.escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    this.escKey.on('down', this.closeItemGetUI, this);
+  }
+
+  // 关闭道具获得UI
+  private closeItemGetUI() {
+    if (!this.isItemUIShowing) return;
+
+    // 移除按键监听
+    if (this.escKey) {
+      this.escKey.removeAllListeners();
+      this.escKey = null;
+    }
+
+    // 销毁UI元素
+    if (this.itemGetContainer) {
+      this.itemGetContainer.destroy();
+      this.itemGetContainer = null;
+    }
+    if (this.itemGetBg) {
+      this.itemGetBg.destroy();
+      this.itemGetBg = null;
+    }
+
+    this.isItemUIShowing = false;
+
+    // 执行回调（应用道具效果）
+    if (this.onUICloseCallback) {
+      this.onUICloseCallback();
+      this.onUICloseCallback = null;
+    }
   }
 }

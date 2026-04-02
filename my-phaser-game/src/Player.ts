@@ -9,7 +9,8 @@ const PlayerState = {
     ROLL: 3,       // 翻滚中 (无敌状态，不可被操作打断)
     ATTACKING: 4,  // 正在攻击中 (硬直状态)
     HURT: 5,       // 受伤硬直
-    DEAD: 6        // 死亡
+    DEAD: 6,       // 死亡
+    ITEM_GET: 7    // 【新增】：获取道具的高举状态
 } as const;
 
 type PlayerState = typeof PlayerState[keyof typeof PlayerState];
@@ -403,6 +404,10 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
             // (翻滚的移动交给了物理引擎的 velocity，动画播完后会通过事件切回 IDLE)
             break;
 
+        case PlayerState.ITEM_GET:
+            // 玩家高举道具发呆中，绝对不处理任何移动和攻击输入！
+            break;
+
         case PlayerState.ATTACKING:
             // 【核心：攻击硬直】
             // 攻击时不允许移动，速度强制归零！
@@ -630,34 +635,25 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   public upgradeToGauntlet() {
     this.hasGauntlet = true;
     console.log("获得拳套！外观改变，解锁翻滚派生重击！");
-    
-    // 保存当前玩家状态
-    const playerState = {
-      x: this.x,
-      y: this.y,
-      direction: this.currentDirection,
-      sceneName: this.scene.sys.config,
-      hasGauntlet: this.hasGauntlet,
-      hasFly: this.hasFly,
-      health: this.health,
-      maxHealth: this.maxHealth
-    };
-    
+
     // 保存状态到全局
     if (!(this.scene.game as any).globalState) {
       (this.scene.game as any).globalState = {};
     }
-    (this.scene.game as any).globalState.playerState = playerState;
-    
-    // 刷新当前场景以确保立即生效
-    console.log("刷新场景以应用拳套外观...");
-    this.scene.scene.restart({
-      spawnPoint: playerState.direction,
-      hasGauntlet: this.hasGauntlet,
-      hasFly: this.hasFly,
-      playerHealth: this.health,
-      playerMaxHealth: this.maxHealth
-    });
+    (this.scene.game as any).globalState.hasGauntlet = true;
+
+    // 动态切换纹理，不重启场景
+    this.setTexture('player_new');
+
+    // 重新创建动画（使用新的纹理）
+    this.createAnimations();
+
+    // 回到默认站姿
+    this.anims.stop();
+    if (this.currentDirection === 'down') this.setFrame(0);
+    else if (this.currentDirection === 'left') this.setFrame(4);
+    else if (this.currentDirection === 'right') this.setFrame(8);
+    else if (this.currentDirection === 'up') this.setFrame(12);
   }
 
   // ==========================================
@@ -724,6 +720,15 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
       });
   }
   
+  // ==========================================
+  // 【核心新增：获得道具展示】
+  // ==========================================
+  
+  // 获取当前应该使用的玩家纹理（用于UI展示）
+  public getPlayerTexture(): string {
+    return this.hasGauntlet ? 'player_new' : 'player';
+  }
+
   // ==========================================
   // 【新增：玩家挨打逻辑】
   // ==========================================

@@ -162,7 +162,7 @@ export default class Enemy2 extends Phaser.Physics.Arcade.Sprite {
         const bullet = new Bullet(
             this.scene,
             this.x,
-            this.y - 10,
+            this.y - 2,
             'bullet',
             this.targetPlayer
         );

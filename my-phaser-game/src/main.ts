@@ -20,7 +20,7 @@ const config: Phaser.Types.Core.GameConfig = {
     default: "arcade",
     arcade: {
       gravity: { x: 0, y: 0 },
-      debug: false // 保持开启，方便观察碰撞框
+      debug: true // 保持开启，方便观察碰撞框
     },
   },
   scene: [GameScene, HouseScene, TwoFloorScene, UnderGroundScene, UIScene],

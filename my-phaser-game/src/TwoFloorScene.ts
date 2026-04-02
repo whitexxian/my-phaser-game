@@ -38,6 +38,43 @@ export default class TwoFloorScene extends Phaser.Scene {
       frameWidth: 32,
       frameHeight: 32,
     });
+
+    // 加载拳套版玩家纹理（用于获得拳套后切换外观）
+    this.load.spritesheet("player_new", "assets/player_new.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    this.load.spritesheet("player_roll", "assets/player_roll.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    this.load.spritesheet("player_roll_new", "assets/player_roll_new.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    this.load.spritesheet("player_attack", "assets/player_attack.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    this.load.spritesheet("player_attack_new", "assets/player_attack_new.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    // 【新增】：加载道具获得动作素材
+    this.load.spritesheet("player_getitem", "assets/player_getitem.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    // 【新增】：加载道具图标素材
+    this.load.image("item_fly", "assets/ui/item_fly.png");
+    this.load.image("item_gauntlet", "assets/ui/item_gauntlet.png");
+    this.load.image("item_hp", "assets/ui/item_hp.png");
   }
 
   create() {
@@ -228,7 +265,7 @@ export default class TwoFloorScene extends Phaser.Scene {
     }
 
     this.scene.launch("UIScene");
-    
+
     // 初始化键盘输入
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = this.input.keyboard!.addKeys("W,A,S,D") as any;

@@ -67,6 +67,43 @@ export default class UnderGroundScene extends Phaser.Scene {
       frameWidth: 32,
       frameHeight: 32,
     });
+
+    // 加载拳套版玩家纹理（用于获得拳套后切换外观）
+    this.load.spritesheet("player_new", "assets/player_new.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    this.load.spritesheet("player_roll", "assets/player_roll.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    this.load.spritesheet("player_roll_new", "assets/player_roll_new.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    this.load.spritesheet("player_attack", "assets/player_attack.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    this.load.spritesheet("player_attack_new", "assets/player_attack_new.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    // 【新增】：加载道具获得动作素材
+    this.load.spritesheet("player_getitem", "assets/player_getitem.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    // 【新增】：加载道具图标素材
+    this.load.image("item_fly", "assets/ui/item_fly.png");
+    this.load.image("item_gauntlet", "assets/ui/item_gauntlet.png");
+    this.load.image("item_hp", "assets/ui/item_hp.png");
   }
 
   create() {
@@ -192,7 +229,7 @@ export default class UnderGroundScene extends Phaser.Scene {
     
     // 启动UI场景
     this.scene.launch("UIScene");
-    
+
     // 初始化键盘输入
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = this.input.keyboard!.addKeys("W,A,S,D") as any;
@@ -236,21 +273,30 @@ export default class UnderGroundScene extends Phaser.Scene {
       }
 
       if (this.activeInteractZone === 'chest_fly') {
-          console.log("获得【嗜血魔蝇】！重击附带叠层流血与吸血！");
-          this.player.hasFly = true;
-          
-          // 创建苍蝇
-          this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);
-          // 苍蝇动画（2x4网格，8帧）
-          this.anims.create({
-              key: 'fly-flap',
-              frames: this.anims.generateFrameNumbers('fly', { start: 0, end: 7 }),
-              frameRate: 10,
-              repeat: -1
+          // 使用新的简化道具获得展示系统
+          this.game.events.emit('show-item-get-ui', {
+              playerTexture: this.player.getPlayerTexture(),
+              itemTexture: 'item_fly',
+              name: '襁褓苍蝇',
+              description: '教宗巴德万拼死保护的襁褓苍蝇。\n跟随玩家，在第三段攻击命中后，将叠加流血与吸血效果。\n"火之将熄，然位不见王影。"',
+              onClose: () => {
+                  // UI关闭后应用效果
+                  console.log("获得【襁褓苍蝇】！重击附带叠层流血与吸血！");
+                  this.player.hasFly = true;
+                  // 创建苍蝇
+                  this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);
+                  // 苍蝇动画（2x4网格，8帧）
+                  this.anims.create({
+                      key: 'fly-flap',
+                      frames: this.anims.generateFrameNumbers('fly', { start: 0, end: 7 }),
+                      frameRate: 10,
+                      repeat: -1
+                  });
+                  this.flyPet.anims.play('fly-flap', true);
+                  // 设置图层深度高于玩家
+                  this.flyPet.setDepth(10);
+              }
           });
-          this.flyPet.anims.play('fly-flap', true);
-          // 设置图层深度高于玩家
-          this.flyPet.setDepth(10);
       }
     }
   }

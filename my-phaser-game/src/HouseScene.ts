@@ -43,6 +43,43 @@ export default class HouseScene extends Phaser.Scene {
       frameWidth: 32,
       frameHeight: 32,
     });
+
+    // 加载拳套版玩家纹理（用于获得拳套后切换外观）
+    this.load.spritesheet("player_new", "assets/player_new.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    this.load.spritesheet("player_roll", "assets/player_roll.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    this.load.spritesheet("player_roll_new", "assets/player_roll_new.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    this.load.spritesheet("player_attack", "assets/player_attack.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    this.load.spritesheet("player_attack_new", "assets/player_attack_new.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    // 【新增】：加载道具获得动作素材
+    this.load.spritesheet("player_getitem", "assets/player_getitem.png", {
+      frameWidth: 32,
+      frameHeight: 32,
+    });
+
+    // 【新增】：加载道具图标素材
+    this.load.image("item_fly", "assets/ui/item_fly.png");
+    this.load.image("item_gauntlet", "assets/ui/item_gauntlet.png");
+    this.load.image("item_hp", "assets/ui/item_hp.png");
   }
 
   create() {
@@ -280,7 +317,7 @@ export default class HouseScene extends Phaser.Scene {
     }
 
     this.scene.launch("UIScene");
-    
+
     // 初始化键盘输入
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = this.input.keyboard!.addKeys("W,A,S,D") as any;
@@ -420,8 +457,18 @@ export default class HouseScene extends Phaser.Scene {
       }
 
       if (this.activeInteractZone === 'chest_gauntlet') {
-          console.log("获得【破岩拳套】！翻滚后可直接派生重击！");
-          this.player.upgradeToGauntlet();
+          // 使用新的简化道具获得展示系统
+          this.game.events.emit('show-item-get-ui', {
+              playerTexture: this.player.getPlayerTexture(),
+              itemTexture: 'item_gauntlet',
+              name: '老皮革拳套',
+              description: '一副饱经风霜的制式皮革拳套，原主人把他保养的很好。\n翻滚后可直接派生第三段攻击。\n"岩石亦可碎，何况敌骨。"',
+              onClose: () => {
+                  // UI关闭后应用效果
+                  console.log("获得【老皮革拳套】！翻滚后可直接派生重击！");
+                  this.player.upgradeToGauntlet();
+              }
+          });
       }
     }
   }
