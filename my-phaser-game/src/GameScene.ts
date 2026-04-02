@@ -52,6 +52,7 @@ export default class GameScene extends Phaser.Scene {
   // 【核心新增：BGM管理系统】
   // ==========================================
   private bgmManager!: BGMManager;
+  private isPlayerDead: boolean = false; // 玩家是否死亡，用于停止BGM更新
 
 
   constructor() {
@@ -141,6 +142,11 @@ export default class GameScene extends Phaser.Scene {
     this.load.audio("normal2", "assets/audio/normal2.mp3");
     this.load.audio("fight1", "assets/audio/fight1.mp3");
     this.load.audio("fight2", "assets/audio/fight2.mp3");
+    
+    // ==========================================
+    // 【核心新增：加载成就图标】
+    // ==========================================
+    this.load.image("achievement_trophy", "assets/ui/achievements.png");
   }
 
   create() {
@@ -237,6 +243,9 @@ export default class GameScene extends Phaser.Scene {
     // 根据spawnPoint设置玩家位置
     let playerX = 400;
     let playerY = 300;
+    
+    // 重置玩家死亡标志（用于BGM系统）
+    this.isPlayerDead = false;
     
     if (this.scene.settings.data && (this.scene.settings.data as any).spawnPoint) {
       const spawnPoint = (this.scene.settings.data as any).spawnPoint;
@@ -663,7 +672,17 @@ export default class GameScene extends Phaser.Scene {
     this.bgmManager = new BGMManager(this);
     // 设置敌人组引用
     this.bgmManager.setEnemies(this.enemies, this.bossesGroup);
+    // 直接开始播放平时音乐（死亡时已经停止，这里重新开始）
     this.bgmManager.startNormalBGM();
+    
+    // 监听停止BGM事件（玩家死亡时）
+    this.game.events.on("stop-bgm", () => {
+      console.log('[GameScene] 收到停止BGM事件，停止BGM更新');
+      this.isPlayerDead = true; // 标记玩家死亡，停止BGM更新
+      if (this.bgmManager) {
+        this.bgmManager.stop();
+      }
+    });
     
     // 初始化键盘输入
     this.cursors = this.input.keyboard!.createCursorKeys();
@@ -843,8 +862,9 @@ export default class GameScene extends Phaser.Scene {
 
     // ==========================================
     // 【核心新增：更新BGM状态（基于Boss距离）】
+    // 玩家死亡后不再更新BGM
     // ==========================================
-    if (this.bgmManager) {
+    if (this.bgmManager && !this.isPlayerDead) {
         this.bgmManager.update();
     }
 
@@ -1159,7 +1179,7 @@ export default class GameScene extends Phaser.Scene {
 // ==========================================
 // 【核心新增：BGM管理器 - 基于敌人追踪状态】
 // ==========================================
-class BGMManager {
+export class BGMManager {
   private scene: Phaser.Scene;
   private currentMusic: Phaser.Sound.BaseSound | null = null;
   private isCombat: boolean = false;
@@ -1335,5 +1355,13 @@ class BGMManager {
   public stop() {
     this.stopCurrentMusic();
     this.isCombat = false;
+  }
+
+  // 强制重置为平时音乐（用于复活时）
+  public forceResetToNormal() {
+    console.log('[BGM] 强制重置为平时音乐');
+    this.isCombat = false;
+    this.stopCurrentMusic();
+    this.playNextNormalTrack();
   }
 }

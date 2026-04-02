@@ -537,6 +537,11 @@ export default class Boss extends Enemy {
         this.setTint(0x333333);
         console.log("【Boss 被击杀！】");
         
+        // ==========================================
+        // 【核心新增：检测无伤无道具击败成就】
+        // ==========================================
+        this.checkMasterAchievement();
+        
         // 重置流血状态，防止复活后自带流血
         (this as any).bleedStacks = 0;
         (this as any).bleedStartTimes = [];
@@ -563,6 +568,33 @@ export default class Boss extends Enemy {
             }
             this.destroy();
         });
+    }
+    
+    // ==========================================
+    // 【核心新增：检测大师成就】
+    // ==========================================
+    private checkMasterAchievement() {
+        // 获取玩家引用
+        const player = (this.scene as any).player;
+        if (!player) return;
+        
+        // 检测条件：
+        // 1. 满血（当前血量等于最大血量）
+        // 2. 没有获得任何道具（没有拳套，没有苍蝇）
+        const isFullHealth = player.health >= player.maxHealth;
+        const hasNoItems = !player.hasGauntlet && !player.hasFly;
+        
+        console.log(`[成就检测] 满血: ${isFullHealth}, 无道具: ${hasNoItems}, 血量: ${player.health}/${player.maxHealth}, 拳套: ${player.hasGauntlet}, 苍蝇: ${player.hasFly}`);
+        
+        if (isFullHealth && hasNoItems) {
+            console.log("[成就解锁] 大师般的技艺！");
+            // 发送事件给UIScene显示成就
+            this.scene.game.events.emit("show-achievement", {
+                title: "大师般的技艺！",
+                description: "您在不使用任何道具的情况下满血击败了boss，向您致敬！",
+                latin: "audentes fortuna iuvat!"
+            });
+        }
     }
 
     // 暴露给主场景的接口，用于判定接触伤害和处决距离

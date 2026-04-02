@@ -73,6 +73,12 @@ export default class UIScene extends Phaser.Scene {
     // 【新增】：监听道具获得UI事件
     this.game.events.on("show-item-get-ui", this.showItemGetUI, this);
 
+    // 【新增】：监听死亡画面事件
+    this.game.events.on("show-death-screen", this.showDeathScreen, this);
+
+    // 【新增】：监听成就展示事件
+    this.game.events.on("show-achievement", this.showAchievement, this);
+
     // 创建提示消息文本
     this.messageText = this.add.text(
       this.cameras.main.width / 2,
@@ -89,6 +95,77 @@ export default class UIScene extends Phaser.Scene {
     this.messageText.setScrollFactor(0);
     this.messageText.setDepth(1002);
     this.messageText.alpha = 0;
+  }
+
+  // 【新增】：显示死亡画面
+  private showDeathScreen = (data: { text: string; color: string; duration: number; onComplete: () => void }) => {
+    console.log('[UIScene] 显示死亡画面:', data.text);
+
+    // 创建黑屏覆盖层（初始alpha为0，完全透明）
+    const blackScreen = this.add.rectangle(
+      this.cameras.main.width / 2,
+      this.cameras.main.height / 2,
+      this.cameras.main.width,
+      this.cameras.main.height,
+      0x000000
+    );
+    blackScreen.setAlpha(0);
+    blackScreen.setScrollFactor(0);
+    blackScreen.setDepth(10000);
+
+    // 创建巨大的死亡文字（初始透明，保持正常大小）
+    const deathLabel = this.add.text(
+      this.cameras.main.width / 2,
+      this.cameras.main.height / 2,
+      data.text,
+      {
+        fontFamily: "SimSun, 宋体, serif",
+        fontSize: "200px",
+        fontStyle: "bold",
+        color: data.color,
+        stroke: data.color,
+        strokeThickness: 8
+      }
+    );
+    deathLabel.setOrigin(0.5);
+    deathLabel.setScrollFactor(0);
+    deathLabel.setDepth(10001);
+    deathLabel.setAlpha(0);
+    // 保持正常大小，不缩放
+
+    // 第一阶段：屏幕渐暗和文字淡入同时进行（3秒）
+    this.tweens.add({
+      targets: blackScreen,
+      alpha: 1,
+      duration: 3000,
+      ease: "Power2"
+    });
+
+    // 文字同时淡入
+    this.tweens.add({
+      targets: deathLabel,
+      alpha: 1,
+      duration: 3000,
+      ease: "Power2" // 使用普通淡入，不弹跳
+    });
+
+    // 第二阶段：持续显示3秒后，淡出文字，然后执行回调
+    this.time.delayedCall(3000 + data.duration, () => {
+      // 文字淡出
+      this.tweens.add({
+        targets: deathLabel,
+        alpha: 0,
+        duration: 500,
+        onComplete: () => {
+          // 清理死亡画面元素
+          blackScreen.destroy();
+          deathLabel.destroy();
+          
+          // 执行回调（复活）
+          data.onComplete();
+        }
+      });
+    });
   }
 
   // 更新 UI 的核心逻辑
@@ -389,5 +466,199 @@ export default class UIScene extends Phaser.Scene {
       this.onUICloseCallback();
       this.onUICloseCallback = null;
     }
+  }
+
+  // ==========================================
+  // 【核心新增：成就展示系统】
+  // ==========================================
+  private achievementContainer: Phaser.GameObjects.Container | null = null;
+  private achievementBg: Phaser.GameObjects.Rectangle | null = null;
+  private isAchievementShowing: boolean = false;
+
+  // 显示成就UI
+  private showAchievement = (data: { title: string; description: string; latin: string }) => {
+    console.log('[UIScene] 显示成就:', data.title);
+    
+    if (this.isAchievementShowing) return;
+    this.isAchievementShowing = true;
+
+    // 暂停游戏物理
+    this.scene.pause('GameScene');
+    this.scene.pause('TwoFloorScene');
+
+    const centerX = this.cameras.main.width / 2;
+    const centerY = this.cameras.main.height / 2;
+
+    // 创建黑屏背景
+    this.achievementBg = this.add.rectangle(
+      centerX, centerY,
+      this.cameras.main.width,
+      this.cameras.main.height,
+      0x000000,
+      0.85
+    );
+    this.achievementBg.setScrollFactor(0);
+    this.achievementBg.setDepth(10000);
+
+    // 创建容器
+    this.achievementContainer = this.add.container(centerX, centerY);
+    this.achievementContainer.setScrollFactor(0);
+    this.achievementContainer.setDepth(10001);
+
+    // 1. 创建奖杯图标（带闪闪发光特效）
+    const trophyIcon = this.add.sprite(0, -80, 'achievement_trophy');
+    trophyIcon.setScale(6);
+
+    // 创建闪光粒子效果
+    const particles = this.add.particles(0, 0, 'achievement_trophy', {
+      scale: { start: 0.5, end: 0 },
+      alpha: { start: 1, end: 0 },
+      speed: { min: 50, max: 100 },
+      lifespan: 1000,
+      quantity: 2,
+      frequency: 200,
+      emitZone: { type: 'edge', source: new Phaser.Geom.Circle(0, -80, 60), quantity: 20 }
+    });
+    particles.setDepth(10002);
+    this.achievementContainer.add(particles);
+
+    // 奖杯旋转发光动画
+    this.tweens.add({
+      targets: trophyIcon,
+      angle: 360,
+      duration: 8000,
+      repeat: -1,
+      ease: 'Linear'
+    });
+
+    // 奖杯缩放脉冲动画
+    this.tweens.add({
+      targets: trophyIcon,
+      scale: 6.5,
+      duration: 1000,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    // 2. 创建标题
+    const titleText = this.add.text(0, 20, data.title, {
+      fontSize: '42px',
+      fontFamily: 'SimSun, 宋体, serif',
+      color: '#ffd700',
+      align: 'center',
+      stroke: '#8b4513',
+      strokeThickness: 6
+    });
+    titleText.setOrigin(0.5);
+
+    // 3. 创建描述
+    const descText = this.add.text(0, 90, data.description, {
+      fontSize: '20px',
+      fontFamily: 'SimSun, 宋体, serif',
+      color: '#ffffff',
+      align: 'center',
+      wordWrap: { width: 500 },
+      lineSpacing: 6
+    });
+    descText.setOrigin(0.5);
+
+    // 4. 创建彩虹浮动拉丁文
+    const latinText = this.add.text(0, 160, data.latin, {
+      fontSize: '28px',
+      fontFamily: 'Times New Roman, serif',
+      color: '#ffffff',
+      align: 'center',
+      fontStyle: 'italic'
+    });
+    latinText.setOrigin(0.5);
+
+    // 彩虹颜色数组
+    const rainbowColors = ['#ff0000', '#ff7f00', '#ffff00', '#00ff00', '#0000ff', '#4b0082', '#9400d3'];
+    let colorIndex = 0;
+
+    // 彩虹颜色变化
+    this.time.addEvent({
+      delay: 200,
+      callback: () => {
+        if (latinText.active) {
+          latinText.setColor(rainbowColors[colorIndex]);
+          colorIndex = (colorIndex + 1) % rainbowColors.length;
+        }
+      },
+      loop: true
+    });
+
+    // 浮动动画
+    this.tweens.add({
+      targets: latinText,
+      y: 160 + 10,
+      duration: 1500,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    // 5. 创建退出提示
+    const exitText = this.add.text(0, 240, '按 [Esc] 继续游戏', {
+      fontSize: '18px',
+      fontFamily: 'Arial',
+      color: '#888888',
+      align: 'center'
+    });
+    exitText.setOrigin(0.5);
+
+    // 退出提示闪烁
+    this.tweens.add({
+      targets: exitText,
+      alpha: 0.4,
+      duration: 800,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.easeInOut'
+    });
+
+    // 添加到容器
+    this.achievementContainer.add([trophyIcon, titleText, descText, latinText, exitText]);
+
+    // 整体淡入动画
+    this.achievementContainer.setAlpha(0);
+    this.tweens.add({
+      targets: this.achievementContainer,
+      alpha: 1,
+      duration: 1000,
+      ease: 'Power2'
+    });
+
+    // 监听 Esc 键关闭
+    this.escKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    this.escKey.on('down', this.closeAchievementUI, this);
+  }
+
+  // 关闭成就UI
+  private closeAchievementUI() {
+    if (!this.isAchievementShowing) return;
+
+    // 移除按键监听
+    if (this.escKey) {
+      this.escKey.removeAllListeners();
+      this.escKey = null;
+    }
+
+    // 销毁UI元素
+    if (this.achievementContainer) {
+      this.achievementContainer.destroy();
+      this.achievementContainer = null;
+    }
+    if (this.achievementBg) {
+      this.achievementBg.destroy();
+      this.achievementBg = null;
+    }
+
+    this.isAchievementShowing = false;
+
+    // 恢复游戏物理
+    this.scene.resume('GameScene');
+    this.scene.resume('TwoFloorScene');
   }
 }
