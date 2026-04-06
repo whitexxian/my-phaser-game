@@ -231,4 +231,9 @@ export class BGMManager {
       this.startNormalBGM();
     });
   }
+
+  // 检查是否处于战斗状态
+  public isInCombat(): boolean {
+    return this.isCombat;
+  }
 }

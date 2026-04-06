@@ -20,6 +20,10 @@ export default class UIScene extends Phaser.Scene {
   // 提示消息相关
   private messageText!: Phaser.GameObjects.Text;
   private messageTween!: Phaser.Tweens.Tween;
+  
+  // 背包按钮
+  private bagIcon: Phaser.GameObjects.Image | null = null;
+  private inventoryKey!: Phaser.Input.Keyboard.Key;
 
   constructor() {
     // 给这个场景起个名字叫 'UIScene'
@@ -39,6 +43,9 @@ export default class UIScene extends Phaser.Scene {
       startFrame: 0,
       endFrame: 2
     });
+    
+    // 加载背包按钮图标
+    this.load.image("icon_bag", "assets/ui/icon_bag.png");
   }
 
   create() {
@@ -95,11 +102,30 @@ export default class UIScene extends Phaser.Scene {
     this.messageText.setScrollFactor(0);
     this.messageText.setDepth(1002);
     this.messageText.alpha = 0;
+    
+    this.messageText.alpha = 0;
+
+    // ==========================================
+    // 【核心新增：背包按钮和B键监听】
+    // 只负责触发打开背包事件，实际背包UI在InventoryScene中管理
+    // ==========================================
+    this.createBagButton();
+    
+    // B键打开背包（发送事件给InventoryScene）
+    this.inventoryKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.B);
+    this.inventoryKey.on('down', () => {
+      console.log('[UIScene] B key pressed, emitting open-inventory event');
+      this.game.events.emit('open-inventory');
+    });
+
+    // 启动 InventoryScene（让它监听事件）
+    this.scene.launch('InventoryScene');
+    console.log('[UIScene] launched InventoryScene');
   }
 
   // 【新增】：显示死亡画面
   private showDeathScreen = (data: { text: string; color: string; duration: number; onComplete: () => void }) => {
-    console.log('[UIScene] 显示死亡画面:', data.text);
+    console.log('[UIScene] 显示死亡画面:', data.text, '持续时间:', data.duration);
 
     // 创建黑屏覆盖层（初始alpha为0，完全透明）
     const blackScreen = this.add.rectangle(
@@ -133,12 +159,20 @@ export default class UIScene extends Phaser.Scene {
     deathLabel.setAlpha(0);
     // 保持正常大小，不缩放
 
+    console.log('[UIScene] 开始淡入动画，场景活跃:', this.scene.isActive());
+
     // 第一阶段：屏幕渐暗和文字淡入同时进行（3秒）
     this.tweens.add({
       targets: blackScreen,
       alpha: 1,
       duration: 3000,
-      ease: "Power2"
+      ease: "Linear",
+      onStart: () => {
+        console.log('[UIScene] 黑屏淡入开始');
+      },
+      onComplete: () => {
+        console.log('[UIScene] 黑屏淡入完成');
+      }
     });
 
     // 文字同时淡入
@@ -146,11 +180,18 @@ export default class UIScene extends Phaser.Scene {
       targets: deathLabel,
       alpha: 1,
       duration: 3000,
-      ease: "Power2" // 使用普通淡入，不弹跳
+      ease: "Linear",
+      onStart: () => {
+        console.log('[UIScene] 文字淡入开始');
+      },
+      onComplete: () => {
+        console.log('[UIScene] 文字淡入完成');
+      }
     });
 
     // 第二阶段：持续显示3秒后，淡出文字，然后执行回调
     this.time.delayedCall(3000 + data.duration, () => {
+      console.log('[UIScene] 开始淡出');
       // 文字淡出
       this.tweens.add({
         targets: deathLabel,
@@ -193,9 +234,9 @@ export default class UIScene extends Phaser.Scene {
     // 先清空旧的
     this.hearts.forEach(h => h.destroy());
     this.hearts = [];
-    // 重新画
+    // 重新画 - 增大心形显示（从scale 2 改为 2.5，位置也相应调整）
     for (let i = 0; i < this.maxHealth; i++) {
-      const heart = this.add.image(40 + i * 40, 40, 'heart-full').setScale(2);
+      const heart = this.add.image(50 + i * 50, 50, 'heart-full').setScale(2.5);
       this.hearts.push(heart);
     }
     this.updateHealthUI(this.currentHealth);
@@ -482,9 +523,19 @@ export default class UIScene extends Phaser.Scene {
     if (this.isAchievementShowing) return;
     this.isAchievementShowing = true;
 
-    // 暂停游戏物理
-    this.scene.pause('GameScene');
-    this.scene.pause('TwoFloorScene');
+    // 暂停游戏物理（只暂停正在运行的场景）
+    const scenes = ['GameScene', 'TwoFloorScene', 'HouseScene', 'UnderGroundScene'];
+    scenes.forEach(name => {
+      const scene = this.scene.get(name);
+      if (scene && scene.scene.isActive()) {
+        try {
+          this.scene.pause(name);
+          console.log(`[UIScene] paused ${name}`);
+        } catch (e) {
+          console.log(`[UIScene] failed to pause ${name}:`, e);
+        }
+      }
+    });
 
     const centerX = this.cameras.main.width / 2;
     const centerY = this.cameras.main.height / 2;
@@ -657,8 +708,56 @@ export default class UIScene extends Phaser.Scene {
 
     this.isAchievementShowing = false;
 
-    // 恢复游戏物理
-    this.scene.resume('GameScene');
-    this.scene.resume('TwoFloorScene');
+    // 恢复游戏场景（只恢复被暂停的场景）
+    const scenes = ['GameScene', 'TwoFloorScene', 'HouseScene', 'UnderGroundScene'];
+    scenes.forEach(name => {
+      const scene = this.scene.get(name);
+      if (scene && scene.scene.isPaused()) {
+        try {
+          this.scene.resume(name);
+          console.log(`[UIScene] resumed ${name}`);
+        } catch (e) {
+          console.log(`[UIScene] failed to resume ${name}:`, e);
+        }
+      }
+    });
+  }
+
+  // ==========================================
+  // 背包按钮（只负责触发事件）
+  // ==========================================
+
+  private createBagButton() {
+    const screenWidth = this.cameras.main.width;
+
+    // 创建背包图标
+    this.bagIcon = this.add.image(screenWidth - 50, 50, 'icon_bag');
+    this.bagIcon.setScale(3);
+    this.bagIcon.setScrollFactor(0);
+    this.bagIcon.setDepth(100);
+    this.bagIcon.setInteractive({ useHandCursor: true });
+
+    // 点击打开背包
+    this.bagIcon.on('pointerdown', () => {
+      this.game.events.emit('open-inventory');
+    });
+
+    // 悬停效果
+    this.bagIcon.on('pointerover', () => {
+      this.bagIcon!.setScale(3.3);
+    });
+    this.bagIcon.on('pointerout', () => {
+      this.bagIcon!.setScale(3);
+    });
+
+    // 提示文字
+    const hintText = this.add.text(screenWidth - 50, 100, '[B]打开', {
+      fontSize: '16px',
+      fontFamily: 'Arial',
+      color: '#ffffff'
+    });
+    hintText.setOrigin(0.5);
+    hintText.setScrollFactor(0);
+    hintText.setDepth(100);
   }
 }

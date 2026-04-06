@@ -162,7 +162,71 @@ export default class TwoFloorScene extends Phaser.Scene {
     // 发送全局事件更新UI血量和最大血量显示
     this.game.events.emit("update-health", this.player.health);
     this.game.events.emit("update-max-health", this.player.maxHealth, this.player.health);
+
+    // ==========================================
+    // 【核心新增：监听装备/卸下事件】
+    // ==========================================
+    // 移除之前的监听器（防止重复注册）
+    this.events.off('update-equipment');
     
+    this.events.on('update-equipment', ({ itemId, equipped }: { itemId: string, equipped: boolean }) => {
+        console.log(`[TwoFloorScene] update-equipment: ${itemId} = ${equipped}`);
+
+        if (itemId === 'potion') {
+            if (equipped) {
+                this.player.maxHealth++;
+                this.player.health = this.player.maxHealth;
+                console.log('[TwoFloorScene] 装备生命药水，最大生命值+1');
+            } else {
+                this.player.maxHealth = Math.max(1, this.player.maxHealth - 1);
+                if (this.player.health > this.player.maxHealth) {
+                    this.player.health = this.player.maxHealth;
+                }
+                console.log('[TwoFloorScene] 卸下生命药水，最大生命值-1');
+            }
+            this.game.events.emit('update-max-health', this.player.maxHealth, this.player.health);
+        }
+        else if (itemId === 'gauntlet') {
+            if (equipped) {
+                this.player.hasGauntlet = true;
+                this.player.setTexture('player_new');
+                this.player.createAnimations();
+                console.log('[TwoFloorScene] 装备拳套');
+            } else {
+                this.player.hasGauntlet = false;
+                this.player.setTexture('player');
+                this.player.createAnimations();
+                console.log('[TwoFloorScene] 卸下拳套');
+            }
+        }
+        else if (itemId === 'fly') {
+            if (equipped) {
+                this.player.hasFly = true;
+                if (!this.flyPet) {
+                    this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);
+                    if (!this.anims.exists('fly-flap')) {
+                        this.anims.create({
+                            key: 'fly-flap',
+                            frames: this.anims.generateFrameNumbers('fly', { start: 0, end: 7 }),
+                            frameRate: 10,
+                            repeat: -1
+                        });
+                    }
+                    this.flyPet.anims.play('fly-flap', true);
+                    this.flyPet.setDepth(10);
+                }
+                console.log('[TwoFloorScene] 装备苍蝇');
+            } else {
+                this.player.hasFly = false;
+                if (this.flyPet) {
+                    this.flyPet.destroy();
+                    this.flyPet = null;
+                }
+                console.log('[TwoFloorScene] 卸下苍蝇');
+            }
+        }
+    });
+
     // 创建苍蝇（如果玩家已经有苍蝇）
     if (this.player.hasFly) {
         this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);
@@ -286,13 +350,34 @@ export default class TwoFloorScene extends Phaser.Scene {
     // 在每帧开始时重置交互区域
     this.activeInteractZone = "";
     
+    // 安全检查：确保玩家和输入都存在
+    if (!this.player || !this.player.active || !this.cursors || !this.wasd) {
+      return;
+    }
+    
     // 手动检查玩家是否在交互区域内
     if (this.interactZones) {
-        this.interactZones.getChildren().forEach((zone: any) => {
-            if (Phaser.Geom.Rectangle.Overlaps(this.player.getBounds(), zone.getBounds())) {
-                this.activeInteractZone = zone.name;
+        try {
+            const children = this.interactZones.getChildren();
+            if (children && Array.isArray(children)) {
+                children.forEach((zone: any) => {
+                    if (zone && zone.active && typeof zone.getBounds === 'function') {
+                        try {
+                            const playerBounds = this.player.getBounds();
+                            const zoneBounds = zone.getBounds();
+                            if (playerBounds && zoneBounds && 
+                                Phaser.Geom.Rectangle.Overlaps(playerBounds, zoneBounds)) {
+                                this.activeInteractZone = zone.name;
+                            }
+                        } catch (e) {
+                            // 忽略单个区域的错误
+                        }
+                    }
+                });
             }
-        });
+        } catch (e) {
+            // 如果 interactZones 有问题，忽略错误
+        }
     }
     
     this.player.update();

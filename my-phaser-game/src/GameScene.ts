@@ -4,6 +4,7 @@ import Enemy from "./Enemy";
 import Enemy2 from "./Enemy2";
 import Boss from "./Boss";
 import { BGMManager } from "./BGMManager";
+import { InventoryManager } from "./InventorySystem";
 
 export default class GameScene extends Phaser.Scene {
   private player!: Player;
@@ -161,6 +162,12 @@ export default class GameScene extends Phaser.Scene {
       return;
     }
 
+    // 确保全局状态存在，并同步到 window.globalState 供 InventorySystem 使用
+    if (!(this.game as any).globalState) {
+      (this.game as any).globalState = {};
+    }
+    (window as any).globalState = (this.game as any).globalState;
+
     // 检查全局状态，看看门是否已经被打开
     if ((this.game as any).globalState && (this.game as any).globalState.gameSceneDoorOpen) {
       this.isDoorOpen = true;
@@ -290,18 +297,79 @@ export default class GameScene extends Phaser.Scene {
     
     // 创建苍蝇（如果玩家已经有苍蝇）
     if (this.player.hasFly) {
-        this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);
-        // 苍蝇动画（2x4网格，8帧）
-        this.anims.create({
-            key: 'fly-flap',
-            frames: this.anims.generateFrameNumbers('fly', { start: 0, end: 7 }),
-            frameRate: 10,
-            repeat: -1
-        });
-        this.flyPet.anims.play('fly-flap', true);
-        // 设置图层深度高于玩家
-        this.flyPet.setDepth(10);
+        this.createFlyPet();
     }
+    
+    // ==========================================
+    // 【核心新增：监听苍蝇装备/卸下事件】
+    // ==========================================
+    this.events.on('equip-fly', () => {
+        console.log('[GameScene] 装备苍蝇');
+        if (!this.flyPet) {
+            this.createFlyPet();
+        }
+    });
+    
+    this.events.on('unequip-fly', () => {
+        console.log('[GameScene] 卸下苍蝇');
+        if (this.flyPet) {
+            this.flyPet.destroy();
+            this.flyPet = null;
+        }
+    });
+
+    // ==========================================
+    // 【核心新增：监听装备/卸下事件】
+    // 注意：使用 this.events（场景级别）而不是 this.game.events（全局）
+    // 避免多个场景同时处理同一事件
+    // ==========================================
+    console.log('[GameScene] Registering update-equipment listener, create call count:', (this as any)._createCallCount);
+    (this as any)._createCallCount = ((this as any)._createCallCount || 0) + 1;
+    
+    // 移除之前的监听器（防止重复注册）
+    this.events.off('update-equipment');
+    
+    this.events.on('update-equipment', ({ itemId, equipped }: { itemId: string, equipped: boolean }) => {
+        console.log(`[GameScene] update-equipment received: ${itemId} = ${equipped}, scene key: ${this.scene.key}, listener count:`, this.events.listenerCount('update-equipment'));
+        
+        if (itemId === 'potion') {
+            if (equipped) {
+                // 装备生命药水：增加最大生命值
+                this.player.maxHealth++;
+                this.player.health = this.player.maxHealth;
+                console.log('[GameScene] 装备生命药水，最大生命值+1');
+            } else {
+                // 卸下生命药水：减少最大生命值
+                this.player.maxHealth = Math.max(1, this.player.maxHealth - 1);
+                // 确保当前生命值不超过最大生命值
+                if (this.player.health > this.player.maxHealth) {
+                    this.player.health = this.player.maxHealth;
+                }
+                console.log('[GameScene] 卸下生命药水，最大生命值-1');
+            }
+            this.game.events.emit('update-max-health', this.player.maxHealth, this.player.health);
+        }
+        else if (itemId === 'fly') {
+            if (equipped) {
+                this.events.emit('equip-fly');
+            } else {
+                this.events.emit('unequip-fly');
+            }
+        }
+        else if (itemId === 'gauntlet') {
+            if (equipped) {
+                this.player.hasGauntlet = true;
+                this.player.setTexture('player_new');
+                this.player.createAnimations();
+                console.log('[GameScene] 装备拳套');
+            } else {
+                this.player.hasGauntlet = false;
+                this.player.setTexture('player');
+                this.player.createAnimations();
+                console.log('[GameScene] 卸下拳套');
+            }
+        }
+    });
     
     // 创建黑屏覆盖层（初始完全不透明）
     const blackScreen = this.add.rectangle(
@@ -971,14 +1039,25 @@ export default class GameScene extends Phaser.Scene {
                     description: '一颗苹果的种子，蕴含着澎湃坚韧的灵魂能量。\n提升生命上限，并且回满生命值。',
                     onClose: () => {
                         // UI关闭后应用效果
-                        this.player.maxHealth++;
-                        this.player.health = this.player.maxHealth;
-                        this.game.events.emit('update-max-health', this.player.maxHealth, this.player.health);
+                        console.log('[GameScene] onClose callback called for hp potion');
+                        
+                        // 解锁药水道具
+                        const inventory = InventoryManager.getInstance();
+                        inventory.unlockItem('potion');
+                        
+                        // 手动触发update-equipment事件（发送到当前场景）
+                        this.events.emit('update-equipment', {
+                            itemId: 'potion',
+                            equipped: true
+                        });
+                        
+                        console.log('[GameScene] hp potion unlocked and equipped, maxHealth:', this.player.maxHealth);
                     }
                 });
             }
             else if (this.activeInteractZone === 'chest_gauntlet') {
                 // 使用新的简化道具获得展示系统
+                console.log('[GameScene] emitting show-item-get-ui for gauntlet');
                 this.game.events.emit('show-item-get-ui', {
                     playerTexture: this.player.getPlayerTexture(),
                     itemTexture: 'item_gauntlet',
@@ -986,7 +1065,10 @@ export default class GameScene extends Phaser.Scene {
                     description: '一副饱经风霜的制式皮革拳套，原主人把他保养的很好。\n翻滚后可直接派生第三段攻击。\n"岩石亦可碎，何况敌骨。"',
                     onClose: () => {
                         // UI关闭后应用效果
-                        console.log("获得【老皮革拳套】！翻滚后可直接派生重击！");
+                        console.log("[GameScene] onClose callback called for gauntlet");
+                        // 使用InventoryManager解锁并自动装备拳套
+                        const inventory = InventoryManager.getInstance();
+                        inventory.unlockItem('gauntlet');
                         this.player.upgradeToGauntlet();
                     }
                 });
@@ -1001,19 +1083,14 @@ export default class GameScene extends Phaser.Scene {
                     onClose: () => {
                         // UI关闭后应用效果
                         console.log("获得【襁褓苍蝇】！重击附带叠层流血与吸血！");
+                        
+                        // 使用InventoryManager解锁并自动装备苍蝇
+                        const inventory = InventoryManager.getInstance();
+                        inventory.unlockItem('fly');
+                        
                         this.player.hasFly = true;
                         // 生成苍蝇宠物实体
-                        this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);
-                        // 苍蝇动画（2x4网格，8帧）
-                        this.anims.create({
-                            key: 'fly-flap',
-                            frames: this.anims.generateFrameNumbers('fly', { start: 0, end: 7 }),
-                            frameRate: 10,
-                            repeat: -1
-                        });
-                        this.flyPet.anims.play('fly-flap', true);
-                        // 设置图层深度高于玩家
-                        this.flyPet.setDepth(10);
+                        this.createFlyPet();
                     }
                 });
             }
@@ -1099,6 +1176,27 @@ export default class GameScene extends Phaser.Scene {
         playerMaxHealth: this.player.maxHealth
       });
     });
+  }
+
+  // ==========================================
+  // 【核心新增：创建苍蝇宠物】
+  // ==========================================
+  private createFlyPet() {
+    if (this.flyPet) return; // 如果已经存在则不创建
+    
+    this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);
+    // 苍蝇动画（2x4网格，8帧）
+    if (!this.anims.exists('fly-flap')) {
+        this.anims.create({
+            key: 'fly-flap',
+            frames: this.anims.generateFrameNumbers('fly', { start: 0, end: 7 }),
+            frameRate: 10,
+            repeat: -1
+        });
+    }
+    this.flyPet.anims.play('fly-flap', true);
+    // 设置图层深度高于玩家
+    this.flyPet.setDepth(10);
   }
 
 

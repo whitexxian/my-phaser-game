@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import Player from "./Player";
+import { InventoryManager } from "./InventorySystem";
 
 export default class UnderGroundScene extends Phaser.Scene {
   private player!: Player;
@@ -161,6 +162,70 @@ export default class UnderGroundScene extends Phaser.Scene {
     this.game.events.emit("update-health", this.player.health);
     this.game.events.emit("update-max-health", this.player.maxHealth, this.player.health);
     
+    // ==========================================
+    // 【核心新增：监听装备/卸下事件】
+    // ==========================================
+    // 移除之前的监听器（防止重复注册）
+    this.events.off('update-equipment');
+    
+    this.events.on('update-equipment', ({ itemId, equipped }: { itemId: string, equipped: boolean }) => {
+        console.log(`[UnderGroundScene] update-equipment: ${itemId} = ${equipped}`);
+        
+        if (itemId === 'potion') {
+            if (equipped) {
+                this.player.maxHealth++;
+                this.player.health = this.player.maxHealth;
+                console.log('[UnderGroundScene] 装备生命药水，最大生命值+1');
+            } else {
+                this.player.maxHealth = Math.max(1, this.player.maxHealth - 1);
+                if (this.player.health > this.player.maxHealth) {
+                    this.player.health = this.player.maxHealth;
+                }
+                console.log('[UnderGroundScene] 卸下生命药水，最大生命值-1');
+            }
+            this.game.events.emit('update-max-health', this.player.maxHealth, this.player.health);
+        }
+        else if (itemId === 'gauntlet') {
+            if (equipped) {
+                this.player.hasGauntlet = true;
+                this.player.setTexture('player_new');
+                this.player.createAnimations();
+                console.log('[UnderGroundScene] 装备拳套');
+            } else {
+                this.player.hasGauntlet = false;
+                this.player.setTexture('player');
+                this.player.createAnimations();
+                console.log('[UnderGroundScene] 卸下拳套');
+            }
+        }
+        else if (itemId === 'fly') {
+            if (equipped) {
+                this.player.hasFly = true;
+                if (!this.flyPet) {
+                    this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);
+                    if (!this.anims.exists('fly-flap')) {
+                        this.anims.create({
+                            key: 'fly-flap',
+                            frames: this.anims.generateFrameNumbers('fly', { start: 0, end: 7 }),
+                            frameRate: 10,
+                            repeat: -1
+                        });
+                    }
+                    this.flyPet.anims.play('fly-flap', true);
+                    this.flyPet.setDepth(10);
+                }
+                console.log('[UnderGroundScene] 装备苍蝇');
+            } else {
+                this.player.hasFly = false;
+                if (this.flyPet) {
+                    this.flyPet.destroy();
+                    this.flyPet = null;
+                }
+                console.log('[UnderGroundScene] 卸下苍蝇');
+            }
+        }
+    });
+    
     // 创建苍蝇（如果玩家已经有苍蝇）
     if (this.player.hasFly) {
         this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);
@@ -282,6 +347,11 @@ export default class UnderGroundScene extends Phaser.Scene {
               onClose: () => {
                   // UI关闭后应用效果
                   console.log("获得【襁褓苍蝇】！重击附带叠层流血与吸血！");
+                  
+                  // 解锁苍蝇道具
+                  const inventory = InventoryManager.getInstance();
+                  inventory.unlockItem('fly');
+                  
                   this.player.hasFly = true;
                   // 创建苍蝇
                   this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);

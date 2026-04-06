@@ -141,7 +141,7 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
     this.createAnimations();
   }
 
-  private createAnimations() {
+  public createAnimations() {
     // 根据当前纹理创建动画
     this.createWalkAnimations();
     this.createRollAnimations();
@@ -149,6 +149,14 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   }
   
   private createWalkAnimations() {
+    // 如果动画已存在，先删除（允许重新创建使用不同纹理的动画）
+    if (this.anims.exists("walk-down")) {
+      this.anims.remove("walk-down");
+      this.anims.remove("walk-left");
+      this.anims.remove("walk-right");
+      this.anims.remove("walk-up");
+    }
+
     // 这里的 frameRate: 8 是动画的“默认基础播放速度”
     this.anims.create({
       key: "walk-down",
@@ -191,6 +199,14 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   private createRollAnimations() {
     const rollTexture = this.hasGauntlet ? "player_roll_new" : "player_roll";
     
+    // 如果动画已存在，先删除
+    if (this.anims.exists("roll-up")) {
+      this.anims.remove("roll-up");
+      this.anims.remove("roll-right");
+      this.anims.remove("roll-left");
+      this.anims.remove("roll-down");
+    }
+    
     this.anims.create({
       key: "roll-up",
       frames: this.anims.generateFrameNumbers(rollTexture, {
@@ -231,6 +247,22 @@ export default class Player extends Phaser.Physics.Arcade.Sprite {
   
   private createAttackAnimations() {
     const attackTexture = this.hasGauntlet ? "player_attack_new" : "player_attack";
+    
+    // 如果动画已存在，先删除
+    if (this.anims.exists("attack_down_1")) {
+      this.anims.remove("attack_down_1");
+      this.anims.remove("attack_down_2");
+      this.anims.remove("attack_down_3");
+      this.anims.remove("attack_left_1");
+      this.anims.remove("attack_left_2");
+      this.anims.remove("attack_left_3");
+      this.anims.remove("attack_right_1");
+      this.anims.remove("attack_right_2");
+      this.anims.remove("attack_right_3");
+      this.anims.remove("attack_up_1");
+      this.anims.remove("attack_up_2");
+      this.anims.remove("attack_up_3");
+    }
     
     // 向下攻击（第一行）
     this.anims.create({

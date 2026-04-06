@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import Player from "./Player";
+import { InventoryManager } from "./InventorySystem";
 
 export default class HouseScene extends Phaser.Scene {
   private player!: Player;
@@ -92,6 +93,12 @@ export default class HouseScene extends Phaser.Scene {
       console.error("图块集加载失败！");
       return;
     }
+
+    // 确保全局状态存在，并同步到 window.globalState 供 InventorySystem 使用
+    if (!(this.game as any).globalState) {
+      (this.game as any).globalState = {};
+    }
+    (window as any).globalState = (this.game as any).globalState;
 
     // ==========================================
     // 【核心修改：用数组管理多图层】
@@ -228,6 +235,76 @@ export default class HouseScene extends Phaser.Scene {
         // 设置图层深度高于玩家
         this.flyPet.setDepth(10);
     }
+
+    // ==========================================
+    // 【核心新增：监听装备/卸下事件】
+    // 注意：使用 this.events（场景级别）而不是 this.game.events（全局）
+    // 避免多个场景同时处理同一事件
+    // ==========================================
+    // 移除之前的监听器（防止重复注册）
+    this.events.off('update-equipment');
+    
+    this.events.on('update-equipment', ({ itemId, equipped }: { itemId: string, equipped: boolean }) => {
+        console.log(`[HouseScene] update-equipment: ${itemId} = ${equipped}`);
+        
+        if (itemId === 'potion') {
+            if (equipped) {
+                // 装备生命药水：增加最大生命值
+                this.player.maxHealth++;
+                this.player.health = this.player.maxHealth;
+                console.log('[HouseScene] 装备生命药水，最大生命值+1');
+            } else {
+                // 卸下生命药水：减少最大生命值
+                this.player.maxHealth = Math.max(1, this.player.maxHealth - 1);
+                // 确保当前生命值不超过最大生命值
+                if (this.player.health > this.player.maxHealth) {
+                    this.player.health = this.player.maxHealth;
+                }
+                console.log('[HouseScene] 卸下生命药水，最大生命值-1');
+            }
+            // 发送事件更新UI
+            this.game.events.emit('update-max-health', this.player.maxHealth, this.player.health);
+        }
+        else if (itemId === 'gauntlet') {
+            if (equipped) {
+                this.player.hasGauntlet = true;
+                this.player.setTexture('player_new');
+                this.player.createAnimations();
+                console.log('[HouseScene] 装备拳套');
+            } else {
+                this.player.hasGauntlet = false;
+                this.player.setTexture('player');
+                this.player.createAnimations();
+                console.log('[HouseScene] 卸下拳套');
+            }
+        }
+        else if (itemId === 'fly') {
+            if (equipped) {
+                this.player.hasFly = true;
+                if (!this.flyPet) {
+                    this.flyPet = this.add.sprite(this.player.x, this.player.y, 'fly').setScale(0.5);
+                    if (!this.anims.exists('fly-flap')) {
+                        this.anims.create({
+                            key: 'fly-flap',
+                            frames: this.anims.generateFrameNumbers('fly', { start: 0, end: 7 }),
+                            frameRate: 10,
+                            repeat: -1
+                        });
+                    }
+                    this.flyPet.anims.play('fly-flap', true);
+                    this.flyPet.setDepth(10);
+                }
+                console.log('[HouseScene] 装备苍蝇');
+            } else {
+                this.player.hasFly = false;
+                if (this.flyPet) {
+                    this.flyPet.destroy();
+                    this.flyPet = null;
+                }
+                console.log('[HouseScene] 卸下苍蝇');
+            }
+        }
+    });
 
     // 5. 批量渲染 Above 层 (不需要碰撞，但必须遮挡玩家)
     const aboveLayers = ["Above"];
@@ -466,6 +543,9 @@ export default class HouseScene extends Phaser.Scene {
               onClose: () => {
                   // UI关闭后应用效果
                   console.log("获得【老皮革拳套】！翻滚后可直接派生重击！");
+                  // 使用InventoryManager解锁并自动装备拳套
+                  const inventory = InventoryManager.getInstance();
+                  inventory.unlockItem('gauntlet');
                   this.player.upgradeToGauntlet();
               }
           });

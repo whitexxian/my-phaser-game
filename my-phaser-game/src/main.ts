@@ -4,6 +4,7 @@ import HouseScene from "./HouseScene";
 import TwoFloorScene from "./TwoFloorScene";
 import UnderGroundScene from "./UnderGroundScene";
 import UIScene from "./UIScene";
+import InventoryScene from "./InventoryScene";
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -23,7 +24,7 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: true // 保持开启，方便观察碰撞框
     },
   },
-  scene: [GameScene, HouseScene, TwoFloorScene, UnderGroundScene, UIScene],
+  scene: [GameScene, HouseScene, TwoFloorScene, UnderGroundScene, UIScene, InventoryScene],
 };
 
 new Phaser.Game(config);

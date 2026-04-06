@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import Enemy from "./Enemy";
+import { InventoryManager } from "./InventorySystem";
 
 // 极其严谨的 Boss 状态机
 export const BossState = {
@@ -580,11 +581,12 @@ export default class Boss extends Enemy {
         
         // 检测条件：
         // 1. 满血（当前血量等于最大血量）
-        // 2. 没有获得任何道具（没有拳套，没有苍蝇）
+        // 2. 没有装备任何道具（使用InventoryManager检查装备状态）
         const isFullHealth = player.health >= player.maxHealth;
-        const hasNoItems = !player.hasGauntlet && !player.hasFly;
+        const inventory = InventoryManager.getInstance();
+        const hasNoItems = !inventory.isEquipped('gauntlet') && !inventory.isEquipped('fly');
         
-        console.log(`[成就检测] 满血: ${isFullHealth}, 无道具: ${hasNoItems}, 血量: ${player.health}/${player.maxHealth}, 拳套: ${player.hasGauntlet}, 苍蝇: ${player.hasFly}`);
+        console.log(`[成就检测] 满血: ${isFullHealth}, 无装备: ${hasNoItems}, 血量: ${player.health}/${player.maxHealth}`);
         
         if (isFullHealth && hasNoItems) {
             console.log("[成就解锁] 大师般的技艺！");
